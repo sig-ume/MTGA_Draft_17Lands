@@ -14,6 +14,7 @@ Magic: The Gathering Arena draft tool that utilizes 17Lands data.
   - [Table of Contents](#table-of-contents)
   - [Run Steps: Windows Executable (Windows Only)](#run-steps-windows-executable-windows-only)
   - [Run Steps: Python (Windows/Mac/Linux)](#run-steps-python-windowsmaclinux)
+  - [Development Setup](#development-setup)
   - [Steps to Build the Windows Executable](#steps-to-build-the-windows-executable)
   - [UI Features](#ui-features)
   - [Menu Features](#menu-features)
@@ -98,6 +99,21 @@ Magic: The Gathering Arena draft tool that utilizes 17Lands data.
   - Pressing the `Refresh` button will help OCR identify the cards in your first pack. For more information on this feature, see [The P1P1 Solution](#the-p1p1-solution).
   - The [Card Compare](#menu-features) feature can be used as a substitute for P1P1.
   - The sealed card pool can be found in the [Taken Cards window](#menu-features).
+
+## Development Setup
+
+For contributors who want to set up a development environment with code quality tools:
+
+```bash
+python setup_dev.py
+```
+
+This single command will:
+- Install all dependencies from `requirements.txt`
+- Install development tools (pre-commit, black, ruff)
+- Set up pre-commit hooks
+
+The pre-commit hooks automatically format and lint your code when you commit, ensuring consistent code quality.
 
 ## Steps to Build the Windows Executable
 
