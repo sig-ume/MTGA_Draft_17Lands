@@ -1,4 +1,6 @@
 ## CRITICAL RULES
+### At the start of the correction
+- Be sure to start considering in Plan mode, get the agreement on the contents, and start the modification
 
 ### Git Commit / Push Policy - ABSOLUTELY REQUIRED
 - **NEVER commit or push without explicit user approval**
