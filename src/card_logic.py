@@ -1,15 +1,16 @@
 """This module contains the functions that are used for processing the collected cards"""
 
-from itertools import combinations
-from dataclasses import dataclass, field
-import logging
-import math
 import copy
-import numpy
-import io
 import csv
+import io
 import json
-from src import constants
+import math
+from dataclasses import dataclass, field
+from itertools import combinations
+
+import numpy
+
+from src import constants, localization
 from src.logger import create_logger
 
 logger = create_logger()
@@ -23,9 +24,7 @@ class DeckMetrics:
     total_cards: int = 0
     total_non_land_cards: int = 0
     distribution_creatures: list = field(default_factory=lambda: [0, 0, 0, 0, 0, 0, 0])
-    distribution_noncreatures: list = field(
-        default_factory=lambda: [0, 0, 0, 0, 0, 0, 0]
-    )
+    distribution_noncreatures: list = field(default_factory=lambda: [0, 0, 0, 0, 0, 0, 0])
     distribution_all: list = field(default_factory=lambda: [0, 0, 0, 0, 0, 0, 0])
 
 
@@ -52,14 +51,17 @@ class CardResult:
 
                 for count, option in enumerate(fields):
                     if constants.FILTER_OPTION_TIER in option:
-                        selected_card["results"][count] = self.__process_tier(
-                            card, option
-                        )
+                        selected_card["results"][count] = self.__process_tier(card, option)
                     elif option == constants.DATA_FIELD_COLORS:
                         selected_card["results"][count] = self.__process_colors(card)
                     elif option == constants.DATA_FIELD_WHEEL:
-                        selected_card["results"][count] = (
-                            self.__process_wheel_normalized(card, wheel_sum)
+                        selected_card["results"][count] = self.__process_wheel_normalized(
+                            card, wheel_sum
+                        )
+                    elif option == constants.DATA_FIELD_NAME:
+                        # Apply localization for card name display
+                        selected_card["results"][count] = localization.get_display_card_name(
+                            card[option]
                         )
                     elif option in card:
                         selected_card["results"][count] = card[option]
@@ -129,9 +131,9 @@ class CardResult:
             if self.pick_number <= len(constants.WHEEL_COEFFICIENTS):
                 # 0 is treated as pick 1 for PremierDraft P1P1
                 self.pick_number = max(self.pick_number, 1)
-                alsa = card[constants.DATA_FIELD_DECK_COLORS][
-                    constants.FILTER_OPTION_ALL_DECKS
-                ][constants.DATA_FIELD_ALSA]
+                alsa = card[constants.DATA_FIELD_DECK_COLORS][constants.FILTER_OPTION_ALL_DECKS][
+                    constants.DATA_FIELD_ALSA
+                ]
 
                 # TODO: How are these coefficients derived/useful?
                 coefficients = constants.WHEEL_COEFFICIENTS[self.pick_number - 1]
@@ -179,9 +181,7 @@ class CardResult:
                         rated_colors.append(rating_data)
                     else:  # Field that's not a win rate (ALSA, IWD, etc)
                         result = card[constants.DATA_FIELD_DECK_COLORS][color][option]
-                        result = (
-                            constants.RESULT_UNKNOWN_STRING if result == 0.0 else result
-                        )
+                        result = constants.RESULT_UNKNOWN_STRING if result == 0.0 else result
             if rated_colors:
                 result = sorted(rated_colors, key=field_process_sort, reverse=True)[0]
         except Exception as error:
@@ -200,9 +200,7 @@ class CardResult:
         else:
             result = card[constants.DATA_FIELD_DECK_COLORS][color][winrate_field]
         result = (
-            constants.RESULT_UNKNOWN_STRING
-            if result == constants.RESULT_UNKNOWN_VALUE
-            else result
+            constants.RESULT_UNKNOWN_STRING if result == constants.RESULT_UNKNOWN_VALUE else result
         )
 
         return result
@@ -219,9 +217,7 @@ class CardResult:
             lower_limit = mean + std * deviation_list[-1]
 
             if (winrate != 0) and (upper_limit != lower_limit):
-                result = round(
-                    ((winrate - lower_limit) / (upper_limit - lower_limit)) * 5.0, 1
-                )
+                result = round(((winrate - lower_limit) / (upper_limit - lower_limit)) * 5.0, 1)
                 result = min(result, 5.0)
                 result = max(result, 0.1)
 
@@ -306,13 +302,10 @@ def deck_card_search(
                 main_color = colors[0]
 
                 if (
-                    include_types
-                    and any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
+                    include_types and any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
                 ) or (
                     not include_types
-                    and not any(
-                        x in card[constants.DATA_FIELD_TYPES] for x in card_types
-                    )
+                    and not any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
                 ):
 
                     if main_color not in card_color_sorted:
@@ -324,14 +317,10 @@ def deck_card_search(
                 for color in colors:
                     if (
                         include_types
-                        and any(
-                            x in card[constants.DATA_FIELD_TYPES] for x in card_types
-                        )
+                        and any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
                     ) or (
                         not include_types
-                        and not any(
-                            x in card[constants.DATA_FIELD_TYPES] for x in card_types
-                        )
+                        and not any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
                     ):
 
                         if color not in card_color_sorted:
@@ -342,13 +331,10 @@ def deck_card_search(
             if not colors and include_colorless:
 
                 if (
-                    include_types
-                    and any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
+                    include_types and any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
                 ) or (
                     not include_types
-                    and not any(
-                        x in card[constants.DATA_FIELD_TYPES] for x in card_types
-                    )
+                    and not any(x in card[constants.DATA_FIELD_TYPES] for x in card_types)
                 ):
 
                     combined_cards.append(card)
@@ -371,10 +357,7 @@ def get_deck_metrics(deck):
         metrics.total_cards = len(deck)
 
         for card in deck:
-            if any(
-                x in [constants.CARD_TYPE_CREATURE]
-                for x in card[constants.DATA_FIELD_TYPES]
-            ):
+            if any(x in [constants.CARD_TYPE_CREATURE] for x in card[constants.DATA_FIELD_TYPES]):
                 metrics.creature_count += 1
                 metrics.total_non_land_cards += 1
                 cmc_total += card[constants.DATA_FIELD_CMC]
@@ -399,15 +382,11 @@ def get_deck_metrics(deck):
                     metrics.distribution_noncreatures[index] += 1
                 metrics.noncreature_count += 1
 
-            index = int(
-                min(card[constants.DATA_FIELD_CMC], len(metrics.distribution_all) - 1)
-            )
+            index = int(min(card[constants.DATA_FIELD_CMC], len(metrics.distribution_all) - 1))
             metrics.distribution_all[index] += 1
 
         metrics.cmc_average = (
-            cmc_total / metrics.total_non_land_cards
-            if metrics.total_non_land_cards
-            else 0.0
+            cmc_total / metrics.total_non_land_cards if metrics.total_non_land_cards else 0.0
         )
 
     except Exception as error:
@@ -442,9 +421,7 @@ def deck_colors(deck, colors_max, metrics, configuration):
         )
 
         # Modify the dictionary to include ratings
-        color_list = list(
-            map((lambda x: {"color": x, "rating": colors[x]}), colors.keys())
-        )
+        color_list = list(map((lambda x: {"color": x, "rating": colors[x]}), colors.keys()))
 
         # Sort the list by decreasing ratings
         color_list = sorted(color_list, key=lambda k: k["rating"], reverse=True)
@@ -492,9 +469,7 @@ def deck_colors(deck, colors_max, metrics, configuration):
         colors_result[constants.FILTER_OPTION_ALL_DECKS] = calculate_color_rating(
             deck, constants.FILTER_OPTION_ALL_DECKS, mean, configuration
         )
-        colors_result = dict(
-            sorted(colors_result.items(), key=lambda item: item[1], reverse=True)
-        )
+        colors_result = dict(sorted(colors_result.items(), key=lambda item: item[1], reverse=True))
     except Exception as error:
         logger.error(error)
 
@@ -512,9 +487,7 @@ def auto_colors(deck, colors_max, metrics, configuration):
             colors = list(colors_dict.keys())
             auto_select_threshold = max(70 - deck_length, 25)
             if len(colors) >= 2:
-                if (
-                    colors_dict[colors[0]] - colors_dict[colors[1]]
-                ) > auto_select_threshold:
+                if (colors_dict[colors[0]] - colors_dict[colors[1]]) > auto_select_threshold:
                     deck_colors_list = colors[0:1]
                 elif configuration.settings.auto_highest_enabled:
                     deck_colors_list = colors[0:2]
@@ -608,10 +581,7 @@ def calculate_curve_factor(deck, color_filter, configuration):
         deck_info = get_deck_metrics(filtered_cards)
         curve_level = curve_levels[int(min(index, len(curve_levels) - 1))]
 
-        if (
-            deck_info.total_cards
-            < configuration.card_logic.deck_control.maximum_card_count
-        ):
+        if deck_info.total_cards < configuration.card_logic.deck_control.maximum_card_count:
             curve_factor -= (
                 (
                     configuration.card_logic.deck_control.maximum_card_count
@@ -620,9 +590,7 @@ def calculate_curve_factor(deck, color_filter, configuration):
                 / configuration.card_logic.deck_control.maximum_card_count
             ) * curve_level
         elif deck_info.creature_count < minimum_creature_count:
-            curve_factor = (
-                deck_info.creature_count / minimum_creature_count
-            ) * curve_level
+            curve_factor = (deck_info.creature_count / minimum_creature_count) * curve_level
         else:
             curve_factor = curve_level
 
@@ -776,9 +744,7 @@ def deck_rating(deck, deck_type, color, threshold):
         # Combined GIHWR of the cards
         for card in deck:
             try:
-                gihwr = card[constants.DATA_FIELD_DECK_COLORS][color][
-                    constants.DATA_FIELD_GIHWR
-                ]
+                gihwr = card[constants.DATA_FIELD_DECK_COLORS][color][constants.DATA_FIELD_GIHWR]
                 if gihwr > threshold:
                     rating += gihwr
             except Exception:
@@ -810,9 +776,7 @@ def deck_rating(deck, deck_type, color, threshold):
         minimum_distribution = deck_type.distribution
         distribution = [0, 0, 0, 0, 0, 0, 0]
         for card in filtered_cards:
-            index = int(
-                min(card[constants.DATA_FIELD_CMC], len(minimum_distribution) - 1)
-            )
+            index = int(min(card[constants.DATA_FIELD_CMC], len(minimum_distribution) - 1))
             distribution[index] += 1
 
     except Exception as error:
@@ -837,7 +801,9 @@ def copy_deck(deck, sideboard):
         if sideboard is not None:
             deck_copy += "\nSideboard\n"
             for card in sideboard:
-                deck_copy += f"{card[constants.DATA_FIELD_COUNT]} {card[constants.DATA_FIELD_NAME]}\n"
+                deck_copy += (
+                    f"{card[constants.DATA_FIELD_COUNT]} {card[constants.DATA_FIELD_NAME]}\n"
+                )
 
     except Exception as error:
         logger.error(error)
@@ -889,9 +855,7 @@ def color_splash(cards, colors, splash_threshold, configuration):
     splash_color = ""
     try:
         # Calculate affinity to rank colors based on splash threshold (minimum GIHWR)
-        color_affinity = calculate_color_affinity(
-            cards, colors, splash_threshold, configuration
-        )
+        color_affinity = calculate_color_affinity(cards, colors, splash_threshold, configuration)
 
         # Modify the dictionary to include ratings
         color_affinity = list(
@@ -906,9 +870,7 @@ def color_splash(cards, colors, splash_threshold, configuration):
             if color["color"] in colors:
                 filtered_colors.remove(color)
         # Sort the list by decreasing ratings
-        filtered_colors = sorted(
-            filtered_colors, key=lambda k: k["rating"], reverse=True
-        )
+        filtered_colors = sorted(filtered_colors, key=lambda k: k["rating"], reverse=True)
 
         if filtered_colors:
             splash_color = filtered_colors[0]["color"]
@@ -945,9 +907,7 @@ def mana_base(deck):
     }
     total_count = 0
     try:
-        number_of_lands = (
-            0 if maximum_deck_size < len(deck) else maximum_deck_size - len(deck)
-        )
+        number_of_lands = 0 if maximum_deck_size < len(deck) else maximum_deck_size - len(deck)
 
         # Go through the cards and count the mana types
         for card in deck:
@@ -955,9 +915,7 @@ def mana_base(deck):
                 # Subtract symbol for lands
                 for mana_type in mana_types.values():
                     mana_type[constants.DATA_FIELD_COUNT] -= (
-                        1
-                        if (mana_type["color"] in card[constants.DATA_FIELD_COLORS])
-                        else 0
+                        1 if (mana_type["color"] in card[constants.DATA_FIELD_COLORS]) else 0
                     )
             else:
                 # Increase count for abilities that are not part of the mana cost
@@ -988,8 +946,7 @@ def mana_base(deck):
 
             land_count = int(
                 math.ceil(
-                    (mana_types[land][constants.DATA_FIELD_COUNT] / total_count)
-                    * number_of_lands
+                    (mana_types[land][constants.DATA_FIELD_COUNT] / total_count) * number_of_lands
                 )
             )
 
@@ -1052,9 +1009,7 @@ def suggest_deck(taken_cards, metrics, configuration):
                 rating = deck_rating(deck, value, color, threshold)
                 if rating >= configuration.card_logic.ratings_threshold:
 
-                    if (color not in decks) or (
-                        color in decks and rating > decks[color]["rating"]
-                    ):
+                    if (color not in decks) or (color in decks and rating > decks[color]["rating"]):
                         decks[color] = {}
                         decks[color]["deck_cards"] = stack_cards(deck)
                         decks[color]["sideboard_cards"] = stack_cards(sideboard_cards)
@@ -1084,9 +1039,7 @@ def build_deck(deck_type, cards, color, metrics, configuration):
     try:
         for card in cards:
             card["results"] = [
-                card[constants.DATA_FIELD_DECK_COLORS][color][
-                    constants.DATA_FIELD_GIHWR
-                ]
+                card[constants.DATA_FIELD_DECK_COLORS][color][constants.DATA_FIELD_GIHWR]
             ]
 
         # identify a splashable color
@@ -1099,18 +1052,14 @@ def build_deck(deck_type, cards, color, metrics, configuration):
         card_colors_sorted = deck_card_search(
             cards, color, [constants.CARD_TYPE_CREATURE], True, True, False
         )
-        card_colors_sorted = sorted(
-            card_colors_sorted, key=lambda k: k["results"][0], reverse=True
-        )
+        card_colors_sorted = sorted(card_colors_sorted, key=lambda k: k["results"][0], reverse=True)
 
         # Identify creatures that fit distribution
         distribution = [0, 0, 0, 0, 0, 0, 0]
         used_count = 0
         used_cmc_combined = 0
         for card in card_colors_sorted:
-            index = int(
-                min(card[constants.DATA_FIELD_CMC], len(minimum_distribution) - 1)
-            )
+            index = int(min(card[constants.DATA_FIELD_CMC], len(minimum_distribution) - 1))
             if distribution[index] < minimum_distribution[index]:
                 deck_list.append(card)
                 sideboard_list.remove(card)
@@ -1121,9 +1070,7 @@ def build_deck(deck_type, cards, color, metrics, configuration):
                 unused_creature_list.append(card)
 
         # Go back and identify remaining creatures that have the highest base rating but don't push average above the threshold
-        unused_cmc_combined = (
-            cmc_average * recommended_creature_count - used_cmc_combined
-        )
+        unused_cmc_combined = cmc_average * recommended_creature_count - used_cmc_combined
 
         unused_creature_list.sort(key=lambda x: x["results"][0], reverse=True)
 
@@ -1167,9 +1114,7 @@ def build_deck(deck_type, cards, color, metrics, configuration):
             False,
         )
 
-        card_colors_sorted = sorted(
-            card_colors_sorted, key=lambda k: k["results"][0], reverse=True
-        )
+        card_colors_sorted = sorted(card_colors_sorted, key=lambda k: k["results"][0], reverse=True)
 
         # Add remaining non-land cards
         for card in card_colors_sorted:
@@ -1185,9 +1130,7 @@ def build_deck(deck_type, cards, color, metrics, configuration):
             sideboard_list, color, [constants.CARD_TYPE_LAND], True, True, False
         )
         land_cards = [
-            x
-            for x in land_cards
-            if x[constants.DATA_FIELD_NAME] not in constants.BASIC_LANDS
+            x for x in land_cards if x[constants.DATA_FIELD_NAME] not in constants.BASIC_LANDS
         ]
         land_cards = sorted(land_cards, key=lambda k: k["results"][0], reverse=True)
         for card in land_cards:

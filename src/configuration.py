@@ -3,8 +3,10 @@
 import json
 import os
 import sys
-from pydantic import BaseModel, field_validator, Field
 from typing import Tuple
+
+from pydantic import BaseModel, Field, field_validator
+
 from src import constants
 from src.logger import create_logger
 
@@ -88,6 +90,15 @@ class Settings(BaseModel):
     arena_log_location: str = ""
     database_location: str = ""
     signals_enabled: bool = True
+    display_language: str = constants.LANGUAGE_DEFAULT
+
+    @field_validator("display_language")
+    @classmethod
+    def validate_display_language(cls, value, info):
+        allowed_values = constants.LANGUAGE_OPTIONS
+        if value not in allowed_values:
+            return cls.model_fields[info.field_name].default
+        return value
 
     @field_validator("deck_filter")
     @classmethod
@@ -193,9 +204,7 @@ def read_configuration(file_location: str = CONFIG_FILE) -> Tuple[Configuration,
     return config_object, success
 
 
-def write_configuration(
-    config_object: Configuration, file_location: str = CONFIG_FILE
-) -> bool:
+def write_configuration(config_object: Configuration, file_location: str = CONFIG_FILE) -> bool:
     """function is responsible for writing the contents of a Configuration object to a specified file location"""
     success = False
 

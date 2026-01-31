@@ -1,57 +1,56 @@
 """This module contains the functions and classes that are used for building and handling the application UI"""
 
+import argparse
+import io
+import math
+import sys
 import tkinter
+import webbrowser
+from os import path, stat
+from tkinter import filedialog
 from tkinter.ttk import (
-    Progressbar,
-    Treeview,
-    Style,
-    OptionMenu,
     Button,
     Checkbutton,
     Label,
+    OptionMenu,
     Separator,
-    Entry,
+    Style,
 )
-from tkinter import filedialog, messagebox, font
+
 import requests
-import sys
-import io
-import math
-import argparse
-import webbrowser
-from os import stat, path
-from pynput.keyboard import Listener, KeyCode
-from PIL import Image, ImageTk, ImageFont
-from src.configuration import (
-    read_configuration,
-    write_configuration,
-    reset_configuration,
-)
-from src.limited_sets import LimitedSets
-from src.log_scanner import ArenaScanner, Source
-from src.file_extractor import search_arena_log_locations, retrieve_arena_directory
-from src.utils import open_file
-from src import constants
-from src.logger import create_logger
-from src.scaled_window import ScaledWindow, identify_safe_coordinates
-from src.tier_list import TierWindow, TierList
-from src.download_dataset import DownloadDatasetWindow
-from src.notifications import Notifications
+from PIL import Image, ImageTk
+from pynput.keyboard import KeyCode, Listener
+
+from src import constants, localization
 from src.card_logic import (
     CardResult,
     copy_deck,
-    stack_cards,
-    field_process_sort,
-    filter_options,
+    copy_pack_to_clipboard,
     deck_card_search,
-    get_card_colors,
-    get_deck_metrics,
-    suggest_deck,
     export_draft_to_csv,
     export_draft_to_json,
-    copy_pack_to_clipboard,
+    field_process_sort,
+    filter_options,
+    get_card_colors,
+    get_deck_metrics,
+    stack_cards,
+    suggest_deck,
 )
+from src.configuration import (
+    read_configuration,
+    reset_configuration,
+    write_configuration,
+)
+from src.download_dataset import DownloadDatasetWindow
+from src.file_extractor import retrieve_arena_directory, search_arena_log_locations
+from src.limited_sets import LimitedSets
+from src.log_scanner import ArenaScanner, Source
+from src.logger import create_logger
+from src.notifications import Notifications
+from src.scaled_window import ScaledWindow, identify_safe_coordinates
 from src.signals import SignalCalculator
+from src.tier_list import TierList, TierWindow
+from src.utils import open_file
 
 try:
     import win32api
@@ -65,6 +64,9 @@ logger = create_logger()
 
 def start_overlay():
     """Retrieve arguments, create overlay object, and run overlay"""
+    # Load Japanese card name mapping at startup
+    localization.load_card_name_mapping()
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument("-f", "--file")
@@ -118,9 +120,7 @@ def control_table_column(table, column_fields, table_width=None):
         if total_visible_columns <= 4:
             proportions = constants.TABLE_PROPORTIONS[total_visible_columns - 1]
             for column in table["displaycolumns"]:
-                column_width = min(
-                    int(math.ceil(proportions[offset] * table_width)), width
-                )
+                column_width = min(int(math.ceil(proportions[offset] * table_width)), width)
                 width -= column_width
                 offset += 1
                 table.column(column, width=column_width)
@@ -135,9 +135,7 @@ def copy_suggested(deck_colors, deck, color_options):
     colors = color_options[deck_colors.get()]
     deck_string = ""
     try:
-        deck_string = copy_deck(
-            deck[colors]["deck_cards"], deck[colors]["sideboard_cards"]
-        )
+        deck_string = copy_deck(deck[colors]["deck_cards"], deck[colors]["sideboard_cards"])
         copy_clipboard(deck_string)
     except Exception as error:
         logger.error(error)
@@ -199,11 +197,7 @@ class AutocompleteEntry(tkinter.Entry):
 
     def autocomplete(self):
         self.current = self.get().lower()
-        self.hits = [
-            item
-            for item in self.completion_list
-            if item.lower().startswith(self.current)
-        ]
+        self.hits = [item for item in self.completion_list if item.lower().startswith(self.current)]
         if self.hits:
             self.hitsIndex = 0  # Start with the first hit
             self.display_autocompletion()
@@ -303,9 +297,7 @@ class Overlay(ScaledWindow):
             )
         else:
             self.configuration.settings.database_location = args.file
-        logger.info(
-            "Card Data Location: %s", self.configuration.settings.database_location
-        )
+        logger.info("Card Data Location: %s", self.configuration.settings.database_location)
 
         self.step_through = args.step
 
@@ -336,9 +328,7 @@ class Overlay(ScaledWindow):
         self.filemenu.add_command(label="Read Draft Log", command=self.__open_draft_log)
         self.filemenu.add_command(
             label="Read Player.log",
-            command=lambda: self.__open_draft_log(
-                self.configuration.settings.arena_log_location
-            ),
+            command=lambda: self.__open_draft_log(self.configuration.settings.arena_log_location),
         )
         self.filemenu.add_command(
             label="Open Player.log",
@@ -364,20 +354,12 @@ class Overlay(ScaledWindow):
             ),
         )
         self.cardmenu = tkinter.Menu(self.menubar, tearoff=0)
-        self.cardmenu.add_command(
-            label="Taken Cards", command=self.__open_taken_cards_window
-        )
-        self.cardmenu.add_command(
-            label="Suggest Decks", command=self.__open_suggest_deck_window
-        )
-        self.cardmenu.add_command(
-            label="Compare Cards", command=self.__open_card_compare_window
-        )
+        self.cardmenu.add_command(label="Taken Cards", command=self.__open_taken_cards_window)
+        self.cardmenu.add_command(label="Suggest Decks", command=self.__open_suggest_deck_window)
+        self.cardmenu.add_command(label="Compare Cards", command=self.__open_card_compare_window)
 
         self.settingsmenu = tkinter.Menu(self.menubar, tearoff=0)
-        self.settingsmenu.add_command(
-            label="Settings", command=self.__open_settings_window
-        )
+        self.settingsmenu.add_command(label="Settings", command=self.__open_settings_window)
 
         self.helpmenu = tkinter.Menu(self.menubar, tearoff=0)
         self.helpmenu.add_command(label="About", command=self.__open_about_window)
@@ -480,6 +462,8 @@ class Overlay(ScaledWindow):
         self.taken_type_selection = tkinter.StringVar(self.root)
         self.ui_size_selection = tkinter.StringVar(self.root)
         self.ui_size_list = constants.UI_SIZE_DICT.keys()
+        self.language_selection = tkinter.StringVar(self.root)
+        self.language_list = constants.LANGUAGE_OPTIONS
 
         self.data_source_option_frame = tkinter.Frame(self.root)
         self.data_source_options = OptionMenu(
@@ -648,9 +632,7 @@ class Overlay(ScaledWindow):
         )
 
         self.separator_frame_citation = Separator(self.root, orient="horizontal")
-        title_label = Label(
-            self.root, text="MTGA Draft 17Lands", style="MainSectionsBold.TLabel"
-        )
+        title_label = Label(self.root, text="MTGA Draft 17Lands", style="MainSectionsBold.TLabel")
 
         footnote_label = Label(
             self.root,
@@ -669,9 +651,7 @@ class Overlay(ScaledWindow):
         self.current_draft_label_frame.grid(
             row=2, column=0, columnspan=1, sticky="nsew", pady=row_padding
         )
-        self.current_draft_value_frame.grid(
-            row=2, column=1, columnspan=1, sticky="nsew"
-        )
+        self.current_draft_value_frame.grid(row=2, column=1, columnspan=1, sticky="nsew")
 
         self.data_source_label_frame.grid(
             row=4, column=0, columnspan=1, sticky="nsew", pady=row_padding
@@ -794,9 +774,7 @@ class Overlay(ScaledWindow):
         """Adjust widget and font scale based on the scale_factor value in config.json"""
         self.scale_factor = 1
         try:
-            self.scale_factor = constants.UI_SIZE_DICT[
-                self.configuration.settings.ui_size
-            ]
+            self.scale_factor = constants.UI_SIZE_DICT[self.configuration.settings.ui_size]
 
             if self.configuration.features.override_scale_factor > 0.0:
                 self.scale_factor = self.configuration.features.override_scale_factor
@@ -814,24 +792,16 @@ class Overlay(ScaledWindow):
         """
         try:
             default_font = tkinter.font.nametofont("TkDefaultFont")
-            default_font.configure(
-                size=self._scale_value(-12), family=constants.FONT_SANS_SERIF
-            )
+            default_font.configure(size=self._scale_value(-12), family=constants.FONT_SANS_SERIF)
 
             text_font = tkinter.font.nametofont("TkTextFont")
-            text_font.configure(
-                size=self._scale_value(-12), family=constants.FONT_SANS_SERIF
-            )
+            text_font.configure(size=self._scale_value(-12), family=constants.FONT_SANS_SERIF)
 
             fixed_font = tkinter.font.nametofont("TkFixedFont")
-            fixed_font.configure(
-                size=self._scale_value(-12), family=constants.FONT_SANS_SERIF
-            )
+            fixed_font.configure(size=self._scale_value(-12), family=constants.FONT_SANS_SERIF)
 
             menu_font = tkinter.font.nametofont("TkMenuFont")
-            menu_font.configure(
-                size=self._scale_value(-12), family=constants.FONT_SANS_SERIF
-            )
+            menu_font.configure(size=self._scale_value(-12), family=constants.FONT_SANS_SERIF)
 
             style = Style()
 
@@ -942,9 +912,7 @@ class Overlay(ScaledWindow):
             )
 
             if selected_color == constants.FILTER_OPTION_AUTO:
-                new_key = (
-                    f"{constants.FILTER_OPTION_AUTO} ({'/'.join(filtered_colors)})"
-                )
+                new_key = f"{constants.FILTER_OPTION_AUTO} ({'/'.join(filtered_colors)})"
                 if new_key != selected_option:
                     self.deck_colors.pop(selected_option)
                     new_dict = {new_key: constants.FILTER_OPTION_AUTO}
@@ -966,9 +934,7 @@ class Overlay(ScaledWindow):
                 self.configuration,
                 self.draft.current_pick,
             )
-            result_list = result_class.return_results(
-                card_list, filtered_colors, fields.values()
-            )
+            result_list = result_class.return_results(card_list, filtered_colors, fields.values())
 
             # Filter out basic lands and unknown cards (numeric IDs) for the UI
             # We keep them in the backend for the CSV export, but hide them here to keep the view clean.
@@ -1015,9 +981,7 @@ class Overlay(ScaledWindow):
                 )
 
             for count, card in enumerate(result_list):
-                row_tag = self._identify_card_row_tag(
-                    self.configuration.settings, card, count
-                )
+                row_tag = self._identify_card_row_tag(self.configuration.settings, card, count)
                 field_values = tuple(card["results"])
                 self.pack_table.insert(
                     "", index=count, iid=count, values=field_values, tag=(row_tag,)
@@ -1035,9 +999,7 @@ class Overlay(ScaledWindow):
         except Exception as error:
             logger.error(error)
 
-    def __update_missing_table(
-        self, missing_cards, picked_cards, filtered_colors, fields
-    ):
+    def __update_missing_table(self, missing_cards, picked_cards, filtered_colors, fields):
         """Update the table that lists the cards that are missing from the current pack"""
         try:
             for row in self.missing_table.get_children():
@@ -1069,29 +1031,21 @@ class Overlay(ScaledWindow):
                     )
 
                     if self.table_info["missing_table"].column in visible_columns:
-                        column_index = visible_columns[
-                            self.table_info["missing_table"].column
-                        ]
+                        column_index = visible_columns[self.table_info["missing_table"].column]
                         direction = self.table_info["missing_table"].reverse
                         result_list = sorted(
                             result_list,
-                            key=lambda d: field_process_sort(
-                                d["results"][column_index]
-                            ),
+                            key=lambda d: field_process_sort(d["results"][column_index]),
                             reverse=direction,
                         )
                     else:
                         result_list = sorted(
                             result_list,
-                            key=lambda d: field_process_sort(
-                                d["results"][last_field_index]
-                            ),
+                            key=lambda d: field_process_sort(d["results"][last_field_index]),
                             reverse=True,
                         )
 
-                    picked_card_names = [
-                        x[constants.DATA_FIELD_NAME] for x in picked_cards
-                    ]
+                    picked_card_names = [x[constants.DATA_FIELD_NAME] for x in picked_cards]
                     for count, card in enumerate(result_list):
                         row_tag = self._identify_card_row_tag(
                             self.configuration.settings, card, count
@@ -1206,9 +1160,7 @@ class Overlay(ScaledWindow):
                 self.compare_table.config(height=0)
 
             for count, card in enumerate(result_list):
-                row_tag = self._identify_card_row_tag(
-                    self.configuration.settings, card, count
-                )
+                row_tag = self._identify_card_row_tag(self.configuration.settings, card, count)
                 field_values = tuple(card["results"])
                 self.compare_table.insert(
                     "", index=count, iid=count, values=field_values, tag=(row_tag,)
@@ -1329,14 +1281,10 @@ class Overlay(ScaledWindow):
                     stacked_cards, filtered_colors, fields.values()
                 )
 
-                last_field_index, visible_columns = control_table_column(
-                    self.taken_table, fields
-                )
+                last_field_index, visible_columns = control_table_column(self.taken_table, fields)
 
                 if self.table_info["taken_table"].column in visible_columns:
-                    column_index = visible_columns[
-                        self.table_info["taken_table"].column
-                    ]
+                    column_index = visible_columns[self.table_info["taken_table"].column]
                     direction = self.table_info["taken_table"].reverse
                     result_list = sorted(
                         result_list,
@@ -1346,9 +1294,7 @@ class Overlay(ScaledWindow):
                 else:
                     result_list = sorted(
                         result_list,
-                        key=lambda d: field_process_sort(
-                            d["results"][last_field_index]
-                        ),
+                        key=lambda d: field_process_sort(d["results"][last_field_index]),
                         reverse=True,
                     )
 
@@ -1359,9 +1305,7 @@ class Overlay(ScaledWindow):
 
                 for count, card in enumerate(result_list):
                     field_values = tuple(card["results"])
-                    row_tag = self._identify_card_row_tag(
-                        self.configuration.settings, card, count
-                    )
+                    row_tag = self._identify_card_row_tag(self.configuration.settings, card, count)
                     self.taken_table.insert(
                         "", index=count, iid=count, values=field_values, tag=(row_tag,)
                     )
@@ -1386,9 +1330,7 @@ class Overlay(ScaledWindow):
 
             color = color_options[selected_color.get()]
             suggested_deck = suggested_decks[color]["deck_cards"]
-            suggested_deck.sort(
-                key=lambda x: x[constants.DATA_FIELD_CMC], reverse=False
-            )
+            suggested_deck.sort(key=lambda x: x[constants.DATA_FIELD_CMC], reverse=False)
             for row in self.suggester_table.get_children():
                 self.suggester_table.delete(row)
 
@@ -1400,17 +1342,13 @@ class Overlay(ScaledWindow):
 
             for count, card in enumerate(suggested_deck):
 
-                row_tag = self._identify_card_row_tag(
-                    self.configuration.settings, card, count
-                )
+                row_tag = self._identify_card_row_tag(self.configuration.settings, card, count)
 
                 if constants.CARD_TYPE_LAND in card[constants.DATA_FIELD_TYPES]:
                     card_colors = "".join(card[constants.DATA_FIELD_COLORS])
                 else:
                     card_colors = "".join(
-                        list(
-                            get_card_colors(card[constants.DATA_FIELD_MANA_COST]).keys()
-                        )
+                        list(get_card_colors(card[constants.DATA_FIELD_MANA_COST]).keys())
                         if not self.configuration.settings.color_identity_enabled
                         else card[constants.DATA_FIELD_COLORS]
                     )
@@ -1419,7 +1357,7 @@ class Overlay(ScaledWindow):
                     "",
                     index=count,
                     values=(
-                        card[constants.DATA_FIELD_NAME],
+                        localization.get_display_card_name(card[constants.DATA_FIELD_NAME]),
                         f"{card[constants.DATA_FIELD_COUNT]}",
                         card_colors,
                         card[constants.DATA_FIELD_CMC],
@@ -1488,11 +1426,7 @@ class Overlay(ScaledWindow):
             width = total_width - 5
             for column in self.stat_table["columns"]:
                 column_width = min(
-                    int(
-                        math.ceil(
-                            constants.STATS_HEADER_CONFIG[column]["width"] * total_width
-                        )
-                    ),
+                    int(math.ceil(constants.STATS_HEADER_CONFIG[column]["width"] * total_width)),
                     width,
                 )
                 width -= column_width
@@ -1541,9 +1475,7 @@ class Overlay(ScaledWindow):
     def __update_current_draft_label(self, event_set, event_type):
         """Update the label that lists the current event set and type (e.g., DMU PremierDraft)"""
         try:
-            new_label = (
-                f" {event_set} {event_type}" if event_set and event_type else " None"
-            )
+            new_label = f" {event_set} {event_type}" if event_set and event_type else " None"
             self.current_draft_value_label.config(text=new_label)
         except Exception as error:
             logger.error(error)
@@ -1609,9 +1541,7 @@ class Overlay(ScaledWindow):
 
             if self.taken_filter_selection.get() not in self.deck_colors:
                 selection = [
-                    k
-                    for k in self.deck_colors.keys()
-                    if constants.DECK_FILTER_DEFAULT in k
+                    k for k in self.deck_colors.keys() if constants.DECK_FILTER_DEFAULT in k
                 ]
                 self.taken_filter_selection.set(
                     selection[0] if len(selection) else constants.DECK_FILTER_DEFAULT
@@ -1742,14 +1672,21 @@ class Overlay(ScaledWindow):
         if message_box:
             restart_overlay(self)
 
+    def __language_callback(self, *_):
+        """Callback function updates the display language setting"""
+        new_language = self.language_selection.get()
+        localization.set_language(new_language)
+        self.__update_settings_storage()
+        self.__update_settings_data()
+        # Refresh UI to apply language change immediately
+        self.__update_overlay_callback(False)
+
     def __update_draft_data(self):
         """Function that collects pertinent draft data from the LogScanner class"""
         dataset_location = self.data_sources[self.data_source_selection.get()]
         self.draft.retrieve_set_data(dataset_location)
         self.set_metrics = self.draft.retrieve_set_metrics()
-        self.deck_colors = self.draft.retrieve_color_win_rate(
-            self.filter_format_selection.get()
-        )
+        self.deck_colors = self.draft.retrieve_color_win_rate(self.filter_format_selection.get())
         event_set, event_type = self.draft.retrieve_current_limited_event()
         self.tier_data, tier_dict = self.tier_list.retrieve_data(event_set)
         self.main_options_dict = constants.COLUMNS_OPTIONS_EXTRA_DICT.copy()
@@ -1778,9 +1715,7 @@ class Overlay(ScaledWindow):
                 std,
             )
 
-        use_ocr = (
-            source == Source.REFRESH and self.configuration.settings.p1p1_ocr_enabled
-        )
+        use_ocr = source == Source.REFRESH and self.configuration.settings.p1p1_ocr_enabled
         if self.draft.draft_data_search(
             use_ocr, self.configuration.settings.save_screenshot_enabled
         ):
@@ -1833,23 +1768,16 @@ class Overlay(ScaledWindow):
                 if selection in self.deck_colors
                 else self.deck_colors[constants.DECK_FILTER_DEFAULT]
             )
-            self.configuration.settings.filter_format = (
-                self.filter_format_selection.get()
-            )
-            self.configuration.settings.result_format = (
-                self.result_format_selection.get()
-            )
+            self.configuration.settings.filter_format = self.filter_format_selection.get()
+            self.configuration.settings.result_format = self.result_format_selection.get()
             self.configuration.settings.ui_size = self.ui_size_selection.get()
+            self.configuration.settings.display_language = self.language_selection.get()
 
             self.configuration.settings.missing_enabled = bool(
                 self.missing_cards_checkbox_value.get()
             )
-            self.configuration.settings.stats_enabled = bool(
-                self.deck_stats_checkbox_value.get()
-            )
-            self.configuration.settings.signals_enabled = bool(
-                self.signals_checkbox_value.get()
-            )
+            self.configuration.settings.stats_enabled = bool(self.deck_stats_checkbox_value.get())
+            self.configuration.settings.signals_enabled = bool(self.signals_checkbox_value.get())
             self.configuration.settings.auto_highest_enabled = bool(
                 self.auto_highest_checkbox_value.get()
             )
@@ -1865,9 +1793,7 @@ class Overlay(ScaledWindow):
             self.configuration.settings.draft_log_enabled = bool(
                 self.draft_log_checkbox_value.get()
             )
-            self.configuration.settings.p1p1_ocr_enabled = bool(
-                self.p1p1_ocr_checkbox_value.get()
-            )
+            self.configuration.settings.p1p1_ocr_enabled = bool(self.p1p1_ocr_checkbox_value.get())
             self.configuration.settings.save_screenshot_enabled = bool(
                 self.save_screenshot_checkbox_value.get()
             )
@@ -1983,70 +1909,34 @@ class Overlay(ScaledWindow):
             self.filter_format_selection.set(self.configuration.settings.filter_format)
             self.result_format_selection.set(self.configuration.settings.result_format)
             self.ui_size_selection.set(self.configuration.settings.ui_size)
-            self.deck_stats_checkbox_value.set(
-                self.configuration.settings.stats_enabled
-            )
+            self.language_selection.set(self.configuration.settings.display_language)
+            localization.set_language(self.configuration.settings.display_language)
+            self.deck_stats_checkbox_value.set(self.configuration.settings.stats_enabled)
             self.signals_checkbox_value.set(self.configuration.settings.signals_enabled)
-            self.missing_cards_checkbox_value.set(
-                self.configuration.settings.missing_enabled
-            )
-            self.auto_highest_checkbox_value.set(
-                self.configuration.settings.auto_highest_enabled
-            )
-            self.curve_bonus_checkbox_value.set(
-                self.configuration.settings.curve_bonus_enabled
-            )
-            self.color_bonus_checkbox_value.set(
-                self.configuration.settings.color_bonus_enabled
-            )
+            self.missing_cards_checkbox_value.set(self.configuration.settings.missing_enabled)
+            self.auto_highest_checkbox_value.set(self.configuration.settings.auto_highest_enabled)
+            self.curve_bonus_checkbox_value.set(self.configuration.settings.curve_bonus_enabled)
+            self.color_bonus_checkbox_value.set(self.configuration.settings.color_bonus_enabled)
             self.color_identity_checkbox_value.set(
                 self.configuration.settings.color_identity_enabled
             )
-            self.draft_log_checkbox_value.set(
-                self.configuration.settings.draft_log_enabled
-            )
-            self.p1p1_ocr_checkbox_value.set(
-                self.configuration.settings.p1p1_ocr_enabled
-            )
+            self.draft_log_checkbox_value.set(self.configuration.settings.draft_log_enabled)
+            self.p1p1_ocr_checkbox_value.set(self.configuration.settings.p1p1_ocr_enabled)
             self.save_screenshot_checkbox_value.set(
                 self.configuration.settings.save_screenshot_enabled
             )
-            self.taken_alsa_checkbox_value.set(
-                self.configuration.settings.taken_alsa_enabled
-            )
-            self.taken_ata_checkbox_value.set(
-                self.configuration.settings.taken_ata_enabled
-            )
-            self.taken_gpwr_checkbox_value.set(
-                self.configuration.settings.taken_gpwr_enabled
-            )
-            self.taken_ohwr_checkbox_value.set(
-                self.configuration.settings.taken_ohwr_enabled
-            )
-            self.taken_gdwr_checkbox_value.set(
-                self.configuration.settings.taken_gdwr_enabled
-            )
-            self.taken_gndwr_checkbox_value.set(
-                self.configuration.settings.taken_gndwr_enabled
-            )
-            self.taken_iwd_checkbox_value.set(
-                self.configuration.settings.taken_iwd_enabled
-            )
-            self.taken_wheel_checkbox_value.set(
-                self.configuration.settings.taken_wheel_enabled
-            )
-            self.card_colors_checkbox_value.set(
-                self.configuration.settings.card_colors_enabled
-            )
-            self.current_draft_checkbox_value.set(
-                self.configuration.settings.current_draft_enabled
-            )
-            self.data_source_checkbox_value.set(
-                self.configuration.settings.data_source_enabled
-            )
-            self.deck_filter_checkbox_value.set(
-                self.configuration.settings.deck_filter_enabled
-            )
+            self.taken_alsa_checkbox_value.set(self.configuration.settings.taken_alsa_enabled)
+            self.taken_ata_checkbox_value.set(self.configuration.settings.taken_ata_enabled)
+            self.taken_gpwr_checkbox_value.set(self.configuration.settings.taken_gpwr_enabled)
+            self.taken_ohwr_checkbox_value.set(self.configuration.settings.taken_ohwr_enabled)
+            self.taken_gdwr_checkbox_value.set(self.configuration.settings.taken_gdwr_enabled)
+            self.taken_gndwr_checkbox_value.set(self.configuration.settings.taken_gndwr_enabled)
+            self.taken_iwd_checkbox_value.set(self.configuration.settings.taken_iwd_enabled)
+            self.taken_wheel_checkbox_value.set(self.configuration.settings.taken_wheel_enabled)
+            self.card_colors_checkbox_value.set(self.configuration.settings.card_colors_enabled)
+            self.current_draft_checkbox_value.set(self.configuration.settings.current_draft_enabled)
+            self.data_source_checkbox_value.set(self.configuration.settings.data_source_enabled)
+            self.deck_filter_checkbox_value.set(self.configuration.settings.deck_filter_enabled)
             self.refresh_button_checkbox_value.set(
                 self.configuration.settings.refresh_button_enabled
             )
@@ -2096,17 +1986,13 @@ class Overlay(ScaledWindow):
             for row in self.signal_table.get_children():
                 self.signal_table.delete(row)
 
-            sorted_scores = sorted(
-                total_scores.items(), key=lambda x: x[1], reverse=True
-            )
+            sorted_scores = sorted(total_scores.items(), key=lambda x: x[1], reverse=True)
 
             self.signal_table.config(height=5)
 
             # Map Symbols to Full Names
             symbol_to_name = {
-                v: k
-                for k, v in constants.CARD_COLORS_DICT.items()
-                if v in constants.CARD_COLORS
+                v: k for k, v in constants.CARD_COLORS_DICT.items() if v in constants.CARD_COLORS
             }
 
             for count, (color, score) in enumerate(sorted_scores):
@@ -2183,9 +2069,7 @@ class Overlay(ScaledWindow):
 
         taken_cards = self.draft.retrieve_taken_cards()
 
-        filtered = self.__identify_auto_colors(
-            taken_cards, self.deck_filter_selection.get()
-        )
+        filtered = self.__identify_auto_colors(taken_cards, self.deck_filter_selection.get())
         fields = {
             "Column1": constants.DATA_FIELD_NAME,
             "Column2": self.main_options_dict[self.column_2_selection.get()],
@@ -2247,9 +2131,7 @@ class Overlay(ScaledWindow):
                 return
 
             # Pass picked_cards
-            data = export_draft_to_csv(
-                history, self.draft.set_data, self.draft.picked_cards
-            )
+            data = export_draft_to_csv(history, self.draft.set_data, self.draft.picked_cards)
 
             f = filedialog.asksaveasfile(
                 mode="w",
@@ -2269,9 +2151,7 @@ class Overlay(ScaledWindow):
             if not history:
                 return
 
-            data = export_draft_to_json(
-                history, self.draft.set_data, self.draft.picked_cards
-            )
+            data = export_draft_to_json(history, self.draft.set_data, self.draft.picked_cards)
 
             f = filedialog.asksaveasfile(
                 mode="w",
@@ -2356,9 +2236,7 @@ class Overlay(ScaledWindow):
             set_data = self.draft.set_data.get_card_ratings()
 
             if set_data:
-                set_card_names = [
-                    v[constants.DATA_FIELD_NAME] for k, v in set_data.items()
-                ]
+                set_card_names = [v[constants.DATA_FIELD_NAME] for k, v in set_data.items()]
 
             headers = {
                 "Column1": {"width": 0.46, "anchor": tkinter.W},
@@ -2371,9 +2249,7 @@ class Overlay(ScaledWindow):
             }
 
             compare_table_frame = tkinter.Frame(popup)
-            compare_scrollbar = tkinter.Scrollbar(
-                compare_table_frame, orient=tkinter.VERTICAL
-            )
+            compare_scrollbar = tkinter.Scrollbar(compare_table_frame, orient=tkinter.VERTICAL)
             compare_scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
             self.compare_table = self._create_header(
                 "compare_table",
@@ -2390,9 +2266,7 @@ class Overlay(ScaledWindow):
             self.compare_table.config(yscrollcommand=compare_scrollbar.set)
             compare_scrollbar.config(command=self.compare_table.yview)
 
-            clear_button = Button(
-                popup, text="Clear", command=self.__clear_compare_table
-            )
+            clear_button = Button(popup, text="Clear", command=self.__clear_compare_table)
 
             card_frame.grid(row=0, column=0, sticky="nsew")
             clear_button.grid(row=1, column=0, sticky="nsew")
@@ -2405,9 +2279,7 @@ class Overlay(ScaledWindow):
             card_entry.focus_set()
             card_entry.pack(side=tkinter.LEFT, expand=True, fill="both")
 
-            card_entry.bind(
-                "<Return>", lambda event: self.__update_compare_table(card_entry)
-            )
+            card_entry.bind("<Return>", lambda event: self.__update_compare_table(card_entry))
 
             self.__update_compare_table(card_entry)
 
@@ -2461,9 +2333,7 @@ class Overlay(ScaledWindow):
             }
 
             taken_table_frame = tkinter.Frame(popup)
-            taken_scrollbar = tkinter.Scrollbar(
-                taken_table_frame, orient=tkinter.VERTICAL
-            )
+            taken_scrollbar = tkinter.Scrollbar(taken_table_frame, orient=tkinter.VERTICAL)
             taken_scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
             self.taken_table = self._create_header(
                 "taken_table",
@@ -2480,9 +2350,7 @@ class Overlay(ScaledWindow):
             self.taken_table.config(yscrollcommand=taken_scrollbar.set)
             taken_scrollbar.config(command=self.taken_table.yview)
 
-            option_frame = tkinter.Frame(
-                popup, highlightbackground="white", highlightthickness=2
-            )
+            option_frame = tkinter.Frame(popup, highlightbackground="white", highlightthickness=2)
             taken_filter_label = Label(
                 option_frame,
                 text="Deck Filter:",
@@ -2542,9 +2410,7 @@ class Overlay(ScaledWindow):
                 offvalue=0,
             )
 
-            checkbox_frame = tkinter.Frame(
-                popup, highlightbackground="white", highlightthickness=2
-            )
+            checkbox_frame = tkinter.Frame(popup, highlightbackground="white", highlightthickness=2)
 
             taken_alsa_checkbox = Checkbutton(
                 checkbox_frame,
@@ -2612,9 +2478,7 @@ class Overlay(ScaledWindow):
             )
 
             option_frame.grid(row=0, column=0, columnspan=7, sticky="nsew")
-            type_checkbox_frame.grid(
-                row=1, column=0, columnspan=7, sticky="nsew", pady=5
-            )
+            type_checkbox_frame.grid(row=1, column=0, columnspan=7, sticky="nsew", pady=5)
             checkbox_frame.grid(row=2, column=0, columnspan=7, sticky="nsew")
             copy_button.grid(row=3, column=0, columnspan=7, sticky="nsew")
             taken_table_frame.grid(row=4, column=0, columnspan=7, sticky="nsew")
@@ -2625,9 +2489,7 @@ class Overlay(ScaledWindow):
 
             taken_land_checkbox.pack(side=tkinter.LEFT, expand=True, fill="both")
 
-            taken_instant_sorcery_checkbox.pack(
-                side=tkinter.LEFT, expand=True, fill="both"
-            )
+            taken_instant_sorcery_checkbox.pack(side=tkinter.LEFT, expand=True, fill="both")
 
             taken_other_checkbox.pack(side=tkinter.LEFT, expand=True, fill="both")
 
@@ -2726,9 +2588,7 @@ class Overlay(ScaledWindow):
             )
 
             deck_colors_value = tkinter.StringVar(popup)
-            deck_colors_entry = OptionMenu(
-                popup, deck_colors_value, choices[0], *choices
-            )
+            deck_colors_entry = OptionMenu(popup, deck_colors_value, choices[0], *choices)
             menu = self.root.nametowidget(deck_colors_entry["menu"])
             menu.config(font=self.fonts_dict["All.TMenubutton"])
 
@@ -2757,9 +2617,7 @@ class Overlay(ScaledWindow):
             }
 
             suggester_table_frame = tkinter.Frame(popup)
-            suggest_scrollbar = tkinter.Scrollbar(
-                suggester_table_frame, orient=tkinter.VERTICAL
-            )
+            suggest_scrollbar = tkinter.Scrollbar(suggester_table_frame, orient=tkinter.VERTICAL)
             suggest_scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
             self.suggester_table = self._create_header(
                 "suggester_table",
@@ -2784,9 +2642,7 @@ class Overlay(ScaledWindow):
 
             self.suggester_table.pack(expand=True, fill="both")
 
-            self.__update_suggest_table(
-                deck_colors_value, suggested_decks, deck_color_options
-            )
+            self.__update_suggest_table(deck_colors_value, suggested_decks, deck_color_options)
         except Exception as error:
             logger.error(error)
 
@@ -3125,6 +2981,24 @@ class Overlay(ScaledWindow):
             menu = self.root.nametowidget(ui_size_options["menu"])
             menu.config(font=self.fonts_dict["All.TMenubutton"])
 
+            language_label = Label(
+                popup,
+                text="Display Language:",
+                style="MainSectionsBold.TLabel",
+                anchor="e",
+            )
+            language_options = OptionMenu(
+                popup,
+                self.language_selection,
+                self.language_selection.get(),
+                *self.language_list,
+                style="All.TMenubutton",
+                command=self.__language_callback,
+            )
+            language_options.config(width=15)
+            menu = self.root.nametowidget(language_options["menu"])
+            menu.config(font=self.fonts_dict["All.TMenubutton"])
+
             default_button = Button(
                 popup, command=self.__default_settings_callback, text="Default Settings"
             )
@@ -3142,9 +3016,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            self.column_2_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            self.column_2_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             column_3_label.grid(
@@ -3155,9 +3027,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            self.column_3_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            self.column_3_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             column_4_label.grid(
@@ -3168,9 +3038,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            self.column_4_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            self.column_4_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             column_5_label.grid(
@@ -3181,9 +3049,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            self.column_5_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            self.column_5_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             column_6_label.grid(
@@ -3194,9 +3060,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            self.column_6_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            self.column_6_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             column_7_label.grid(
@@ -3207,9 +3071,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            self.column_7_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            self.column_7_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             filter_format_label.grid(
@@ -3220,9 +3082,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            filter_format_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            filter_format_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             result_format_label.grid(
@@ -3233,9 +3093,7 @@ class Overlay(ScaledWindow):
                 padx=row_padding_x,
                 pady=row_padding_y,
             )
-            result_format_options.grid(
-                row=row_count, column=1, columnspan=1, sticky="nsew"
-            )
+            result_format_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             ui_size_label.grid(
@@ -3247,6 +3105,17 @@ class Overlay(ScaledWindow):
                 pady=row_padding_y,
             )
             ui_size_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
+            row_count += 1
+
+            language_label.grid(
+                row=row_count,
+                column=0,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            language_options.grid(row=row_count, column=1, columnspan=1, sticky="nsew")
             row_count += 1
 
             current_draft_label.grid(
@@ -3539,9 +3408,7 @@ class Overlay(ScaledWindow):
 
         popup = tkinter.Toplevel()
         popup.wm_title("About")
-        popup.protocol(
-            "WM_DELETE_WINDOW", lambda window=popup: self.__close_about_window(window)
-        )
+        popup.protocol("WM_DELETE_WINDOW", lambda window=popup: self.__close_about_window(window))
         popup.attributes("-topmost", True)
         popup.resizable(width=False, height=False)
         location_x, location_y = identify_safe_coordinates(
@@ -3610,17 +3477,13 @@ class Overlay(ScaledWindow):
             )
             row_count += 1
 
-            url_separator.grid(
-                row=row_count, column=0, columnspan=2, sticky="nsew", pady=row_pad_y
-            )
+            url_separator.grid(row=row_count, column=0, columnspan=2, sticky="nsew", pady=row_pad_y)
             row_count += 1
 
             github_url.grid(row=row_count, column=0, columnspan=2, sticky="nsew")
             row_count += 1
 
-            seventeenlands_url.grid(
-                row=row_count, column=0, columnspan=2, sticky="nsew"
-            )
+            seventeenlands_url.grid(row=row_count, column=0, columnspan=2, sticky="nsew")
             row_count += 1
 
             patreon_url.grid(row=row_count, column=0, columnspan=2, sticky="nsew")
@@ -3635,9 +3498,7 @@ class Overlay(ScaledWindow):
         except Exception as error:
             logger.error(error)
 
-    def __process_table_click(
-        self, event, table, card_list, selected_color, fields=None
-    ):
+    def __process_table_click(self, event, table, card_list, selected_color, fields=None):
         """Creates the card tooltip when a table row is clicked"""
         color_dict = {}
         for item in table.selection():
@@ -3647,14 +3508,11 @@ class Overlay(ScaledWindow):
                 if card_name == card[constants.DATA_FIELD_NAME]:
                     try:
                         for color in selected_color:
-                            color_dict[color] = {
-                                x: "NA" for x in constants.DATA_FIELDS_LIST
-                            }
+                            color_dict[color] = {x: "NA" for x in constants.DATA_FIELDS_LIST}
                             for k in color_dict[color]:
                                 if (
                                     color in card[constants.DATA_FIELD_DECK_COLORS]
-                                    and k
-                                    in card[constants.DATA_FIELD_DECK_COLORS][color]
+                                    and k in card[constants.DATA_FIELD_DECK_COLORS][color]
                                 ):
                                     if k in constants.WIN_RATE_FIELDS_DICT:
                                         color_dict[color][k] = card[
@@ -3667,19 +3525,12 @@ class Overlay(ScaledWindow):
                         tier_info = {}
                         if fields and self.tier_data:
                             for name, tier_list in self.tier_data.items():
-                                if (
-                                    name in fields.values()
-                                    and card_name in tier_list.ratings
-                                ):
-                                    tier_info[name] = tier_list.ratings[
-                                        card_name
-                                    ].comment
+                                if name in fields.values() and card_name in tier_list.ratings:
+                                    tier_info[name] = tier_list.ratings[card_name].comment
 
                         # Get the top archetypes for this card
-                        archetype_list = (
-                            self.draft.set_data.get_card_archetypes_by_field(
-                                card_name, constants.DATA_FIELD_GIHWR
-                            )
+                        archetype_list = self.draft.set_data.get_card_archetypes_by_field(
+                            card_name, constants.DATA_FIELD_GIHWR
                         )
 
                         # Add the grade/rating based on selected format
@@ -3702,7 +3553,7 @@ class Overlay(ScaledWindow):
                         CreateCardToolTip(
                             table,
                             event,
-                            card[constants.DATA_FIELD_NAME],
+                            localization.get_display_card_name(card[constants.DATA_FIELD_NAME]),
                             color_dict,
                             card[constants.DATA_SECTION_IMAGES],
                             self.configuration.features.images_enabled,
@@ -3752,39 +3603,27 @@ class Overlay(ScaledWindow):
             trace_list = [
                 (
                     self.column_2_selection,
-                    lambda: self.column_2_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.column_2_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.column_3_selection,
-                    lambda: self.column_3_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.column_3_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.column_4_selection,
-                    lambda: self.column_4_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.column_4_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.column_5_selection,
-                    lambda: self.column_5_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.column_5_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.column_6_selection,
-                    lambda: self.column_6_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.column_6_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.column_7_selection,
-                    lambda: self.column_7_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.column_7_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.deck_stats_checkbox_value,
@@ -3794,9 +3633,7 @@ class Overlay(ScaledWindow):
                 ),
                 (
                     self.signals_checkbox_value,
-                    lambda: self.signals_checkbox_value.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.signals_checkbox_value.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.missing_cards_checkbox_value,
@@ -3824,9 +3661,7 @@ class Overlay(ScaledWindow):
                 ),
                 (
                     self.data_source_selection,
-                    lambda: self.data_source_selection.trace(
-                        "w", self.__update_source_callback
-                    ),
+                    lambda: self.data_source_selection.trace("w", self.__update_source_callback),
                 ),
                 (
                     self.stat_options_selection,
@@ -3854,21 +3689,15 @@ class Overlay(ScaledWindow):
                 ),
                 (
                     self.filter_format_selection,
-                    lambda: self.filter_format_selection.trace(
-                        "w", self.__update_source_callback
-                    ),
+                    lambda: self.filter_format_selection.trace("w", self.__update_source_callback),
                 ),
                 (
                     self.result_format_selection,
-                    lambda: self.result_format_selection.trace(
-                        "w", self.__update_source_callback
-                    ),
+                    lambda: self.result_format_selection.trace("w", self.__update_source_callback),
                 ),
                 (
                     self.deck_filter_selection,
-                    lambda: self.deck_filter_selection.trace(
-                        "w", self.__update_source_callback
-                    ),
+                    lambda: self.deck_filter_selection.trace("w", self.__update_source_callback),
                 ),
                 (
                     self.taken_alsa_checkbox_value,
@@ -3920,15 +3749,11 @@ class Overlay(ScaledWindow):
                 ),
                 (
                     self.taken_filter_selection,
-                    lambda: self.taken_filter_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.taken_filter_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.taken_type_selection,
-                    lambda: self.taken_type_selection.trace(
-                        "w", self.__update_settings_callback
-                    ),
+                    lambda: self.taken_type_selection.trace("w", self.__update_settings_callback),
                 ),
                 (
                     self.card_colors_checkbox_value,
@@ -4027,9 +3852,7 @@ class Overlay(ScaledWindow):
         toggle_widget(self.missing_frame, self.missing_cards_checkbox_value.get())
         toggle_widget(self.missing_table_frame, self.missing_cards_checkbox_value.get())
 
-        toggle_widget(
-            self.refresh_button_frame, self.refresh_button_checkbox_value.get()
-        )
+        toggle_widget(self.refresh_button_frame, self.refresh_button_checkbox_value.get())
 
         draft_visible = self.current_draft_checkbox_value.get()
         toggle_widget(self.current_draft_label_frame, draft_visible)
@@ -4144,9 +3967,7 @@ class CreateCardToolTip(ScaledWindow):
                 for count, picture_url in enumerate(self.image):
                     try:
                         if picture_url:
-                            response = requests.get(
-                                picture_url, headers=request_header, timeout=5
-                            )
+                            response = requests.get(picture_url, headers=request_header, timeout=5)
                             im = Image.open(io.BytesIO(response.content))
                             im.thumbnail(size, Image.Resampling.LANCZOS)
                             image = ImageTk.PhotoImage(im)
@@ -4227,9 +4048,7 @@ class CreateCardToolTip(ScaledWindow):
                 style="TooltipTable.TLabel",
                 anchor="c",
             )
-            stats_label.grid(
-                row=0, column=column_offset, sticky="nsew", ipady=self._scale_value(2)
-            )
+            stats_label.grid(row=0, column=column_offset, sticky="nsew", ipady=self._scale_value(2))
             stats_main_table.grid(row=1, column=column_offset)
             stats_frame.grid(row=1, column=column_offset, sticky="n")
             column_offset += 1
@@ -4244,9 +4063,7 @@ class CreateCardToolTip(ScaledWindow):
                 anchor="c",
             )
 
-            card_label.grid(
-                column=0, row=0, columnspan=column_offset, sticky=tkinter.NSEW
-            )
+            card_label.grid(column=0, row=0, columnspan=column_offset, sticky=tkinter.NSEW)
 
             row_count = 3
             for name, comment in self.tier_info.items():
@@ -4283,9 +4100,7 @@ class CreateCardToolTip(ScaledWindow):
                 anchor="c",
             )
 
-            note_label.grid(
-                column=0, row=row_count, columnspan=column_offset, sticky=tkinter.NSEW
-            )
+            note_label.grid(column=0, row=row_count, columnspan=column_offset, sticky=tkinter.NSEW)
 
             tt_width += self._scale_value(10)
             location_x, location_y = identify_safe_coordinates(
@@ -4395,71 +4210,43 @@ class CreateCardToolTip(ScaledWindow):
         table_data.append(tuple(values))
 
         values = ["Average Last Seen At:"] + [
-            (
-                f"{x[constants.DATA_FIELD_ALSA]}"
-                if x[constants.DATA_FIELD_ALSA] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_ALSA]}" if x[constants.DATA_FIELD_ALSA] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
 
         values = ["Improvement When Drawn:"] + [
-            (
-                f"{x[constants.DATA_FIELD_IWD]}pp"
-                if x[constants.DATA_FIELD_IWD] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_IWD]}pp" if x[constants.DATA_FIELD_IWD] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
 
         values = ["Games In Hand Win Rate:"] + [
-            (
-                f"{x[constants.DATA_FIELD_GIHWR]}%"
-                if x[constants.DATA_FIELD_GIHWR] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_GIHWR]}%" if x[constants.DATA_FIELD_GIHWR] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
 
         values = ["Opening Hand Win Rate:"] + [
-            (
-                f"{x[constants.DATA_FIELD_OHWR]}%"
-                if x[constants.DATA_FIELD_OHWR] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_OHWR]}%" if x[constants.DATA_FIELD_OHWR] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
 
         values = ["Games Played Win Rate:"] + [
-            (
-                f"{x[constants.DATA_FIELD_GPWR]}%"
-                if x[constants.DATA_FIELD_GPWR] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_GPWR]}%" if x[constants.DATA_FIELD_GPWR] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
 
         values = ["Games Drawn Win Rate:"] + [
-            (
-                f"{x[constants.DATA_FIELD_GDWR]}%"
-                if x[constants.DATA_FIELD_GDWR] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_GDWR]}%" if x[constants.DATA_FIELD_GDWR] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
 
         values = ["Games Not Seen Win Rate:"] + [
-            (
-                f"{x[constants.DATA_FIELD_GNSWR]}%"
-                if x[constants.DATA_FIELD_GNSWR] != 0
-                else ""
-            )
+            (f"{x[constants.DATA_FIELD_GNSWR]}%" if x[constants.DATA_FIELD_GNSWR] != 0 else "")
             for x in self.color_dict.values()
         ]
         table_data.append(tuple(values))
