@@ -790,7 +790,23 @@ class Overlay(ScaledWindow):
         - Negative font values are in pixels and positive font values are
           in points (1/72 inch = 1 point)
         """
+        # Some environments do not expose the tkinter.font submodule as an attribute
+        # via attribute access, so import it explicitly to guarantee availability.
         try:
+            import tkinter.font  # ensure the submodule is loaded
+        except Exception as error:
+            # Log the import failure but continue with safe defaults
+            logger.exception(error)
+
+        # Provide safe defaults so callers won't get KeyError if font setup fails
+        try:
+            # Set fallbacks before attempting detailed configuration
+            self.fonts_dict.setdefault(
+                "All.TMenubutton", (constants.FONT_SANS_SERIF, self._scale_value(-12))
+            )
+            self.fonts_dict.setdefault("All.TableRow", self._scale_value(-11))
+            self.fonts_dict.setdefault("Sets.TableRow", self._scale_value(-13))
+
             default_font = tkinter.font.nametofont("TkDefaultFont")
             default_font.configure(size=self._scale_value(-12), family=constants.FONT_SANS_SERIF)
 
@@ -851,6 +867,7 @@ class Overlay(ScaledWindow):
                 "All.TMenubutton",
                 font=(constants.FONT_SANS_SERIF, self._scale_value(-12)),
             )
+            # Keep the fonts_dict consistent with the style
             self.fonts_dict["All.TMenubutton"] = (
                 constants.FONT_SANS_SERIF,
                 self._scale_value(-12),
@@ -889,7 +906,7 @@ class Overlay(ScaledWindow):
                 style.configure("TEntry", foreground="black")
 
         except Exception as error:
-            logger.error(error)
+            logger.exception(error)
 
     def __start_hotkey_listener(self):
         """Start listener that detects the minimize hotkey"""
