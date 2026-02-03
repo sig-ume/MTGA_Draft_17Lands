@@ -73,8 +73,11 @@ def get_display_card_name(english_name: str) -> str:
     if _current_language == constants.LANGUAGE_EN:
         return english_name
 
+    # Normalize split card names (/// to //) for mapping consistency
+    normalized_name = english_name.replace("///", "//")
+
     # Return Japanese name if available, fallback to English
-    return _card_name_mapping.get(english_name, english_name)
+    return _card_name_mapping.get(normalized_name, english_name)
 
 
 def is_translation_available() -> bool:

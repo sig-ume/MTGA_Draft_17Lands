@@ -1005,7 +1005,7 @@ class Overlay(ScaledWindow):
                 )
             self.pack_table.bind(
                 "<<TreeviewSelect>>",
-                lambda event: self.__process_table_click(
+                lambda event, card_list=result_list: self.__process_table_click(
                     event,
                     table=self.pack_table,
                     card_list=card_list,
@@ -1062,16 +1062,17 @@ class Overlay(ScaledWindow):
                             reverse=True,
                         )
 
-                    picked_card_names = [x[constants.DATA_FIELD_NAME] for x in picked_cards]
+                    picked_card_names = [x[constants.DATA_FIELD_NAME].replace("///", "//") for x in picked_cards]
                     for count, card in enumerate(result_list):
                         row_tag = self._identify_card_row_tag(
                             self.configuration.settings, card, count
                         )
                         for index, field in enumerate(fields.values()):
                             if field == constants.DATA_FIELD_NAME:
+                                card_name_normalized = card[constants.DATA_FIELD_NAME].replace("///", "//")
                                 card["results"][index] = (
                                     f'*{card["results"][index]}'
-                                    if card["results"][index] in picked_card_names
+                                    if card_name_normalized in picked_card_names
                                     else card["results"][index]
                                 )
                         field_values = tuple(card["results"])
@@ -1084,10 +1085,10 @@ class Overlay(ScaledWindow):
                         )
                     self.missing_table.bind(
                         "<<TreeviewSelect>>",
-                        lambda event: self.__process_table_click(
+                        lambda event, card_list=result_list: self.__process_table_click(
                             event,
                             table=self.missing_table,
-                            card_list=missing_cards,
+                            card_list=card_list,
                             selected_color=filtered_colors,
                             fields=fields,
                         ),
@@ -1127,12 +1128,15 @@ class Overlay(ScaledWindow):
             if entry_box and card_list:
                 added_card = entry_box.get()
                 if added_card:
-                    cards = [
-                        card_list[x]
-                        for x in card_list
-                        if card_list[x][constants.DATA_FIELD_NAME] == added_card
-                        and card_list[x] not in self.compare_list
-                    ]
+                    cards = []
+                    for x in card_list:
+                        eng_name = card_list[x][constants.DATA_FIELD_NAME]
+                        # Support matching with either English name or Japanese name
+                        if (eng_name == added_card or 
+                            localization.get_display_card_name(eng_name.replace("///", "//")) == added_card):
+                            if card_list[x] not in self.compare_list:
+                                cards.append(card_list[x])
+                                break
                     entry_box.delete(0, tkinter.END)
                     if cards:
                         self.compare_list.append(cards[0])
@@ -1184,10 +1188,10 @@ class Overlay(ScaledWindow):
                 )
             self.compare_table.bind(
                 "<<TreeviewSelect>>",
-                lambda event: self.__process_table_click(
+                lambda event, card_list=result_list: self.__process_table_click(
                     event,
                     table=self.compare_table,
-                    card_list=self.compare_list,
+                    card_list=card_list,
                     selected_color=filtered_colors,
                     fields=fields,
                 ),
@@ -1328,10 +1332,10 @@ class Overlay(ScaledWindow):
                     )
                 self.taken_table.bind(
                     "<<TreeviewSelect>>",
-                    lambda event: self.__process_table_click(
+                    lambda event, card_list=result_list: self.__process_table_click(
                         event,
                         table=self.taken_table,
-                        card_list=result_list,
+                        card_list=card_list,
                         selected_color=filtered_colors,
                     ),
                 )
@@ -1373,6 +1377,7 @@ class Overlay(ScaledWindow):
                 self.suggester_table.insert(
                     "",
                     index=count,
+                    iid=count,
                     values=(
                         localization.get_display_card_name(card[constants.DATA_FIELD_NAME]),
                         f"{card[constants.DATA_FIELD_COUNT]}",
@@ -1384,10 +1389,10 @@ class Overlay(ScaledWindow):
                 )
             self.suggester_table.bind(
                 "<<TreeviewSelect>>",
-                lambda event: self.__process_table_click(
+                lambda event, card_list=suggested_deck: self.__process_table_click(
                     event,
                     table=self.suggester_table,
-                    card_list=suggested_deck,
+                    card_list=card_list,
                     selected_color=[color],
                 ),
             )
@@ -2253,7 +2258,16 @@ class Overlay(ScaledWindow):
             set_data = self.draft.set_data.get_card_ratings()
 
             if set_data:
-                set_card_names = [v[constants.DATA_FIELD_NAME] for k, v in set_data.items()]
+                set_card_names = []
+                for k, v in set_data.items():
+                    eng_name = v[constants.DATA_FIELD_NAME]
+                    set_card_names.append(eng_name)
+                    # Also include Japanese name in autocomplete list if Japanese is selected
+                    if self.configuration.settings.language == constants.LANGUAGE_JP:
+                        jp_name = localization.get_display_card_name(eng_name.replace("///", "//"))
+                        if jp_name != eng_name:
+                            set_card_names.append(jp_name)
+                set_card_names = sorted(list(set(set_card_names)))
 
             headers = {
                 "Column1": {"width": 0.46, "anchor": tkinter.W},
@@ -3519,69 +3533,70 @@ class Overlay(ScaledWindow):
         """Creates the card tooltip when a table row is clicked"""
         color_dict = {}
         for item in table.selection():
-            card_name = table.item(item, "value")[0]
-            for card in card_list:
-                card_name = card_name if card_name[0] != "*" else card_name[1:]
-                if card_name == card[constants.DATA_FIELD_NAME]:
-                    try:
-                        for color in selected_color:
-                            color_dict[color] = {x: "NA" for x in constants.DATA_FIELDS_LIST}
-                            for k in color_dict[color]:
-                                if (
-                                    color in card[constants.DATA_FIELD_DECK_COLORS]
-                                    and k in card[constants.DATA_FIELD_DECK_COLORS][color]
-                                ):
-                                    if k in constants.WIN_RATE_FIELDS_DICT:
-                                        color_dict[color][k] = card[
-                                            constants.DATA_FIELD_DECK_COLORS
-                                        ][color][k]
-                                    else:
-                                        color_dict[color][k] = card[
-                                            constants.DATA_FIELD_DECK_COLORS
-                                        ][color][k]
-                        tier_info = {}
-                        if fields and self.tier_data:
-                            for name, tier_list in self.tier_data.items():
-                                if name in fields.values() and card_name in tier_list.ratings:
-                                    tier_info[name] = tier_list.ratings[card_name].comment
+            try:
+                card_index = int(item)
+                card = card_list[card_index]
+                card_name = card[constants.DATA_FIELD_NAME]
+                try:
+                    for color in selected_color:
+                        color_dict[color] = {x: "NA" for x in constants.DATA_FIELDS_LIST}
+                        for k in color_dict[color]:
+                            if (
+                                color in card[constants.DATA_FIELD_DECK_COLORS]
+                                and k in card[constants.DATA_FIELD_DECK_COLORS][color]
+                            ):
+                                if k in constants.WIN_RATE_FIELDS_DICT:
+                                    color_dict[color][k] = card[
+                                        constants.DATA_FIELD_DECK_COLORS
+                                    ][color][k]
+                                else:
+                                    color_dict[color][k] = card[
+                                        constants.DATA_FIELD_DECK_COLORS
+                                    ][color][k]
+                    tier_info = {}
+                    if fields and self.tier_data:
+                        for name, tier_list in self.tier_data.items():
+                            if name in fields.values() and card_name in tier_list.ratings:
+                                tier_info[name] = tier_list.ratings[card_name].comment
 
-                        # Get the top archetypes for this card
-                        archetype_list = self.draft.set_data.get_card_archetypes_by_field(
-                            card_name, constants.DATA_FIELD_GIHWR
+                    # Get the top archetypes for this card
+                    archetype_list = self.draft.set_data.get_card_archetypes_by_field(
+                        card_name, constants.DATA_FIELD_GIHWR
+                    )
+
+                    # Add the grade/rating based on selected format
+                    if (
+                        self.configuration.settings.result_format
+                        != constants.RESULT_FORMAT_WIN_RATE
+                    ):
+                        results = CardResult(
+                            self.set_metrics,
+                            self.tier_data,
+                            self.configuration,
+                            self.draft.current_pick,
                         )
-
-                        # Add the grade/rating based on selected format
-                        if (
-                            self.configuration.settings.result_format
-                            != constants.RESULT_FORMAT_WIN_RATE
-                        ):
-                            results = CardResult(
-                                self.set_metrics,
-                                self.tier_data,
-                                self.configuration,
-                                self.draft.current_pick,
+                        for archetype in archetype_list:
+                            rating = results.return_results(
+                                [card], [archetype[1]], [constants.DATA_FIELD_GIHWR]
                             )
-                            for archetype in archetype_list:
-                                rating = results.return_results(
-                                    [card], [archetype[1]], [constants.DATA_FIELD_GIHWR]
-                                )
-                                archetype.append(rating[0]["results"][0])
+                            archetype.append(rating[0]["results"][0])
 
-                        CreateCardToolTip(
-                            table,
-                            event,
-                            localization.get_display_card_name(card[constants.DATA_FIELD_NAME]),
-                            color_dict,
-                            card[constants.DATA_SECTION_IMAGES],
-                            self.configuration.features.images_enabled,
-                            self.scale_factor,
-                            self.fonts_dict,
-                            tier_info,
-                            archetype_list,
-                        )
-                    except Exception as error:
-                        logger.error(error)
-                    break
+                    CreateCardToolTip(
+                        table,
+                        event,
+                        localization.get_display_card_name(card[constants.DATA_FIELD_NAME]),
+                        color_dict,
+                        card[constants.DATA_SECTION_IMAGES],
+                        self.configuration.features.images_enabled,
+                        self.scale_factor,
+                        self.fonts_dict,
+                        tier_info,
+                        archetype_list,
+                    )
+                except Exception as error:
+                    logger.error(error)
+            except Exception as error:
+                logger.error(error)
 
     def __open_draft_log(self, log_path=""):
         '''
@@ -3843,6 +3858,10 @@ class Overlay(ScaledWindow):
                     lambda: self.missing_notifications_checkbox_value.trace(
                         "w", self.__update_settings_callback
                     ),
+                ),
+                (
+                    self.language_selection,
+                    lambda: self.language_selection.trace("w", self.__language_callback),
                 ),
             ]
 

@@ -60,8 +60,10 @@ class CardResult:
                         )
                     elif option == constants.DATA_FIELD_NAME:
                         # Apply localization for card name display
+                        # Normalize split card names (/// to //) for mapping consistency
+                        display_name = card[option].replace("///", "//")
                         selected_card["results"][count] = localization.get_display_card_name(
-                            card[option]
+                            display_name
                         )
                     elif option in card:
                         selected_card["results"][count] = card[option]
