@@ -1,5 +1,5 @@
-import os
 import getpass
+import os
 
 APPLICATION_VERSION = 3.37
 OLD_APPLICATION_VERSION = "0320"
@@ -200,15 +200,11 @@ RESULT_FORMAT_LIST = [RESULT_FORMAT_WIN_RATE, RESULT_FORMAT_RATING, RESULT_FORMA
 RESULT_UNKNOWN_STRING = " "
 RESULT_UNKNOWN_VALUE = 0.0
 
-LOCAL_DATA_FOLDER_PATH_WINDOWS = os.path.join(
-    "Wizards of the Coast", "MTGA", "MTGA_Data"
-)
+LOCAL_DATA_FOLDER_PATH_WINDOWS = os.path.join("Wizards of the Coast", "MTGA", "MTGA_Data")
 LOCAL_DATA_FOLDER_PATH_WINDOWS_STEAM = os.path.join(
     "Steam", "steamapps", "common", "MTGA", "MTGA_Data"
 )
-LOCAL_DATA_FOLDER_PATH_OSX = os.path.join(
-    "Library", "Application Support", "com.wizards.mtga"
-)
+LOCAL_DATA_FOLDER_PATH_OSX = os.path.join("Library", "Application Support", "com.wizards.mtga")
 LOCAL_DATA_FOLDER_PATH_OSX_STEAM = os.path.join(
     "Library", "Application Support", "Steam", "steamapps", "common", "MTGA", "MTGA_Data"
 )
@@ -350,9 +346,7 @@ LOG_LOCATION_WINDOWS = os.path.join(
     "MTGA",
     LOG_NAME,
 )
-LOG_LOCATION_OSX = os.path.join(
-    "Library", "Logs", "Wizards of the Coast", "MTGA", LOG_NAME
-)
+LOG_LOCATION_OSX = os.path.join("Library", "Logs", "Wizards of the Coast", "MTGA", LOG_NAME)
 LOG_LOCATION_LINUX = os.path.join(
     ".local",
     "share",
@@ -778,3 +772,12 @@ PICK_TWO_EVENT_STRING = "PickTwo"
 CARD_RATINGS_BACKOFF_DELAY_SECONDS = 30
 CARD_RATINGS_INTER_DELAY_SECONDS = 1
 CARD_RATINGS_ATTEMPT_MAX = 5
+
+# Language settings
+LANGUAGE_EN = "EN"
+LANGUAGE_JP = "JP"
+LANGUAGE_OPTIONS = [LANGUAGE_EN, LANGUAGE_JP]
+LANGUAGE_DEFAULT = LANGUAGE_EN
+
+# Translation file path
+TRANSLATION_FILE = os.path.join(os.getcwd(), "data", "translation.json")
