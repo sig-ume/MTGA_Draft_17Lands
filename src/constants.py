@@ -180,6 +180,8 @@ DRAFT_PACK_STRING_PREMIER = "[UnityCrossThreadLogger]Draft.Notify "
 DRAFT_START_STRING_QUICK_DRAFT = "[UnityCrossThreadLogger]==> BotDraft_DraftStatus "
 DRAFT_PACK_STRING_QUICK = "DraftPack"
 DRAFT_PICK_STRING_QUICK = "[UnityCrossThreadLogger]==> BotDraft_DraftPick "
+DRAFT_GET_PACK_STRING_QUICK = "[UnityCrossThreadLogger]==> BotDraft_GetPack "
+DECK_GET_DETAILS_STRING = "[UnityCrossThreadLogger]==> Deck_GetDeckDetails "
 
 DRAFT_START_STRINGS = [DRAFT_START_STRING_PREMIER, DRAFT_START_STRING_QUICK_DRAFT]
 

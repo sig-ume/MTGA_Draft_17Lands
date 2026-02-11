@@ -33,6 +33,7 @@ from src.card_logic import (
     filter_options,
     get_card_colors,
     get_deck_metrics,
+    parse_arena_export,
     stack_cards,
     suggest_deck,
 )
