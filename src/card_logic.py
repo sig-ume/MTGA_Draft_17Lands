@@ -813,40 +813,6 @@ def copy_deck(deck, sideboard):
     return deck_copy
 
 
-def parse_arena_export(text):
-    """The function will parse an Arena export list and return a list of card names and counts"""
-    deck = []
-    sideboard = []
-    current_list = deck
-    try:
-        lines = text.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            if line.lower() == "deck":
-                current_list = deck
-                continue
-            if line.lower() == "sideboard":
-                current_list = sideboard
-                continue
-
-            # Arena Export format: Count Name (SET) CollectorNumber
-            # Example: 1 Card Name (SET) 123
-            # Or just: 1 Card Name
-            match = re.match(r"(\d+)\s+(.+?)(?:\s+\((.+?)\)\s+(\d+))?$", line)
-            if match:
-                count = int(match.group(1))
-                name = match.group(2).strip()
-                # If we have multiple copies, we append the name 'count' times
-                for _ in range(count):
-                    current_list.append(name)
-    except Exception as error:
-        logger.error(error)
-
-    return deck, sideboard
-
-
 def stack_cards(cards):
     """The function will produce a list consisting of unique cards and the number of copies of each card"""
     deck = {}

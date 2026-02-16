@@ -69,7 +69,6 @@ class ArenaScanner:
         self.picked_cards = [[] for i in range(self.number_of_players)]
         self.taken_cards = []
         self.sideboard = []
-        self.deck = []
         self.pack_cards = [[]] * self.number_of_players
         self.initial_pack = [[]] * self.number_of_players
         self.previous_picked_pack = 0
@@ -129,8 +128,6 @@ class ArenaScanner:
         self.picked_cards = [[] for i in range(self.number_of_players)]
         self.taken_cards = []
         self.sideboard = []
-        self.deck = []
-        self.deck = []
         self.pack_cards = [[]] * self.number_of_players
         self.initial_pack = [[]] * self.number_of_players
         self.current_pack = 0
@@ -1234,16 +1231,6 @@ class ArenaScanner:
         """Return the card data for all of the cards that were picked during the draft"""
         taken_cards = self.set_data.get_data_by_id(self.taken_cards)
         return taken_cards
-
-    def retrieve_deck_cards(self):
-        """Return the card data for all of the cards in the main deck"""
-        deck_cards = self.set_data.get_data_by_id(self.deck)
-        return deck_cards
-
-    def retrieve_sideboard_cards(self):
-        """Return the card data for all of the cards in the sideboard"""
-        sideboard_cards = self.set_data.get_data_by_id(self.sideboard)
-        return sideboard_cards
 
     def retrieve_current_pack_and_pick(self):
         """Return the current pack and pick numbers (p1p1 is current_pack=1, current_pick=1)"""
