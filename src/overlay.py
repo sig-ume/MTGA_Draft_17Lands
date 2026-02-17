@@ -3,6 +3,7 @@
 import argparse
 import io
 import math
+import os
 import sys
 import tkinter
 import webbrowser
@@ -99,7 +100,7 @@ def fixed_map(style, option):
     ]
 
 
-def control_table_column(table, column_fields, table_width=None):
+def control_table_column(table, column_fields, table_width=None, icon_column_width=0):
     """Hide disabled table columns"""
     visible_columns = {}
     last_field_index = 0
@@ -115,12 +116,13 @@ def control_table_column(table, column_fields, table_width=None):
     # Resize columns if there are fewer than 4
     if table_width:
         total_visible_columns = len(visible_columns)
-        width = table_width
+        width = max(table_width - icon_column_width, 0)
+        available_width = width
         offset = 0
-        if total_visible_columns <= 4:
+        if 0 < total_visible_columns <= 4:
             proportions = constants.TABLE_PROPORTIONS[total_visible_columns - 1]
             for column in table["displaycolumns"]:
-                column_width = min(int(math.ceil(proportions[offset] * table_width)), width)
+                column_width = min(int(math.ceil(proportions[offset] * available_width)), width)
                 width -= column_width
                 offset += 1
                 table.column(column, width=column_width)
@@ -319,6 +321,7 @@ class Overlay(ScaledWindow):
         self.data_sources = self.draft.retrieve_data_sources()
         self.tier_list = TierList()
         self.set_metrics = self.draft.retrieve_set_metrics()
+        self.color_icon_images = {}
 
         tkinter.Grid.columnconfigure(self.root, 0, weight=1)
         tkinter.Grid.columnconfigure(self.root, 1, weight=1)
@@ -424,6 +427,7 @@ class Overlay(ScaledWindow):
         self.taken_gdwr_checkbox_value = tkinter.IntVar(self.root)
         self.card_colors_checkbox_value = tkinter.IntVar(self.root)
         self.color_identity_checkbox_value = tkinter.IntVar(self.root)
+        self.color_icons_checkbox_value = tkinter.IntVar(self.root)
         self.current_draft_checkbox_value = tkinter.IntVar(self.root)
         self.data_source_checkbox_value = tkinter.IntVar(self.root)
         self.deck_filter_checkbox_value = tkinter.IntVar(self.root)
@@ -524,6 +528,8 @@ class Overlay(ScaledWindow):
         self.copy_pack_button.pack(side=tkinter.RIGHT, padx=5)
 
         self.pack_table_frame = tkinter.Frame(self.root, width=10)
+        self.pack_table_frame.configure(width=self.table_width)
+        self.pack_table_frame.grid_propagate(False)
 
         headers = {
             "Column1": {"width": 0.46, "anchor": tkinter.W},
@@ -554,6 +560,8 @@ class Overlay(ScaledWindow):
         )
 
         self.missing_table_frame = tkinter.Frame(self.root, width=10)
+        self.missing_table_frame.configure(width=self.table_width)
+        self.missing_table_frame.grid_propagate(False)
 
         self.missing_table = self._create_header(
             "missing_table",
@@ -670,9 +678,9 @@ class Overlay(ScaledWindow):
         self.refresh_button_frame.grid(row=8, column=0, columnspan=2, sticky="nsew")
 
         self.status_frame.grid(row=9, column=0, columnspan=2, sticky="nsew")
-        self.pack_table_frame.grid(row=10, column=0, columnspan=2)
+        self.pack_table_frame.grid(row=10, column=0, columnspan=2, sticky="nsew")
         self.missing_frame.grid(row=11, column=0, columnspan=2, sticky="nsew")
-        self.missing_table_frame.grid(row=12, column=0, columnspan=2)
+        self.missing_table_frame.grid(row=12, column=0, columnspan=2, sticky="nsew")
         self.stat_frame.grid(row=13, column=0, columnspan=2, sticky="nsew")
         self.stat_table.grid(row=14, column=0, columnspan=2, sticky="nsew")
 
@@ -700,6 +708,7 @@ class Overlay(ScaledWindow):
         self.previous_timestamp = 0
         self.log_check_id = None
 
+        self.__load_color_icon_images()
         self.__update_settings_data()
         self.__update_overlay_callback(False)
 
@@ -888,6 +897,22 @@ class Overlay(ScaledWindow):
             )
 
             style.configure("Treeview", rowheight=self._scale_value(25))
+            style.configure("Icon.Treeview", rowheight=self._scale_value(25), indent=0)
+            style.layout(
+                "Icon.Treeview.Item",
+                [
+                    (
+                        "Treeitem.padding",
+                        {
+                            "sticky": "nswe",
+                            "children": [
+                                ("Treeitem.image", {"side": "left", "sticky": ""}),
+                                ("Treeitem.text", {"side": "left", "sticky": ""}),
+                            ],
+                        },
+                    )
+                ],
+            )
 
             style.configure("Taken.Treeview", rowheight=self._scale_value(25))
 
@@ -942,9 +967,76 @@ class Overlay(ScaledWindow):
 
         return filtered_colors
 
+    def __load_color_icon_images(self):
+        """Load prebuilt color icon images used by Pack/Missing tables."""
+        self.color_icon_images = {}
+        try:
+            icon_dir = path.join(path.dirname(path.dirname(__file__)), "assets", "icons", "colors")
+            if not path.isdir(icon_dir):
+                return
+
+            for file_name in [x for x in os.listdir(icon_dir) if x.lower().endswith(".png")]:
+                key = path.splitext(file_name)[0].upper()
+                file_path = path.join(icon_dir, file_name)
+                image = Image.open(file_path)
+                self.color_icon_images[key] = ImageTk.PhotoImage(image)
+        except Exception as error:
+            logger.error(error)
+
+    def __color_icon_enabled(self):
+        return bool(self.configuration.settings.color_icons_enabled)
+
+    def __configure_color_icon_column(self, table, enabled):
+        """Toggle tree column visibility for color icons."""
+        try:
+            if enabled:
+                table.configure(style="Icon.Treeview")
+                table["show"] = "tree headings"
+                table.heading("#0", text="CLR", anchor=tkinter.W)
+                table.column(
+                    "#0",
+                    stretch=tkinter.NO,
+                    anchor=tkinter.W,
+                    width=self._scale_value(constants.COLOR_ICON_COLUMN_WIDTH),
+                    minwidth=self._scale_value(constants.COLOR_ICON_COLUMN_WIDTH),
+                )
+            else:
+                table.configure(style=constants.TABLE_STYLE)
+                table["show"] = "headings"
+                table.column("#0", width=0, minwidth=0, stretch=tkinter.NO)
+                table.heading("#0", text="")
+        except Exception as error:
+            logger.error(error)
+
+    def __extract_card_color_symbols(self, card):
+        """Return ordered color symbols using the current color identity setting."""
+        colors = []
+        try:
+            if (
+                self.configuration.settings.color_identity_enabled
+                or constants.CARD_TYPE_LAND in card[constants.DATA_FIELD_TYPES]
+            ):
+                colors = [x for x in card.get(constants.DATA_FIELD_COLORS, []) if x in constants.CARD_COLORS]
+            else:
+                mana_colors = get_card_colors(card.get(constants.DATA_FIELD_MANA_COST, ""))
+                colors = [x for x in mana_colors.keys() if x in constants.CARD_COLORS]
+        except Exception as error:
+            logger.error(error)
+
+        return sorted(set(colors), key=constants.CARD_COLORS.index)
+
+    def __get_color_icon_key(self, card):
+        colors = self.__extract_card_color_symbols(card)
+        return "".join(colors) if colors else "C"
+
+    def __get_color_icon_image(self, card):
+        key = self.__get_color_icon_key(card)
+        return self.color_icon_images.get(key, self.color_icon_images.get("C"))
+
     def __update_pack_table(self, card_list, filtered_colors, fields):
         """Update the table that lists the cards within the current pack"""
         try:
+            icon_enabled = self.__color_icon_enabled()
             result_class = CardResult(
                 self.set_metrics,
                 self.tier_data,
@@ -979,8 +1071,12 @@ class Overlay(ScaledWindow):
 
             # Update the filtered column header with the filtered colors
             last_field_index, visible_columns = control_table_column(
-                self.pack_table, fields, self.table_width
+                self.pack_table,
+                fields,
+                self.table_width,
+                self._scale_value(constants.COLOR_ICON_COLUMN_WIDTH) if icon_enabled else 0,
             )
+            self.__configure_color_icon_column(self.pack_table, icon_enabled)
 
             if self.table_info["pack_table"].column in visible_columns:
                 column_index = visible_columns[self.table_info["pack_table"].column]
@@ -1000,9 +1096,20 @@ class Overlay(ScaledWindow):
             for count, card in enumerate(result_list):
                 row_tag = self._identify_card_row_tag(self.configuration.settings, card, count)
                 field_values = tuple(card["results"])
-                self.pack_table.insert(
-                    "", index=count, iid=count, values=field_values, tag=(row_tag,)
-                )
+                if icon_enabled:
+                    self.pack_table.insert(
+                        "",
+                        index=count,
+                        iid=count,
+                        text="",
+                        values=field_values,
+                        image=self.__get_color_icon_image(card),
+                        tag=(row_tag,),
+                    )
+                else:
+                    self.pack_table.insert(
+                        "", index=count, iid=count, values=field_values, tag=(row_tag,)
+                    )
             self.pack_table.bind(
                 "<<TreeviewSelect>>",
                 lambda event, card_list=result_list: self.__process_table_click(
@@ -1019,13 +1126,18 @@ class Overlay(ScaledWindow):
     def __update_missing_table(self, missing_cards, picked_cards, filtered_colors, fields):
         """Update the table that lists the cards that are missing from the current pack"""
         try:
+            icon_enabled = self.__color_icon_enabled()
             for row in self.missing_table.get_children():
                 self.missing_table.delete(row)
 
             # Update the filtered column header with the filtered colors
             last_field_index, visible_columns = control_table_column(
-                self.missing_table, fields, self.table_width
+                self.missing_table,
+                fields,
+                self.table_width,
+                self._scale_value(constants.COLOR_ICON_COLUMN_WIDTH) if icon_enabled else 0,
             )
+            self.__configure_color_icon_column(self.missing_table, icon_enabled)
             if not missing_cards:
                 self.missing_table.config(height=0)
             else:
@@ -1076,13 +1188,24 @@ class Overlay(ScaledWindow):
                                     else card["results"][index]
                                 )
                         field_values = tuple(card["results"])
-                        self.missing_table.insert(
-                            "",
-                            index=count,
-                            iid=count,
-                            values=field_values,
-                            tag=(row_tag,),
-                        )
+                        if icon_enabled:
+                            self.missing_table.insert(
+                                "",
+                                index=count,
+                                iid=count,
+                                text="",
+                                values=field_values,
+                                image=self.__get_color_icon_image(card),
+                                tag=(row_tag,),
+                            )
+                        else:
+                            self.missing_table.insert(
+                                "",
+                                index=count,
+                                iid=count,
+                                values=field_values,
+                                tag=(row_tag,),
+                            )
                     self.missing_table.bind(
                         "<<TreeviewSelect>>",
                         lambda event, card_list=result_list: self.__process_table_click(
@@ -1812,6 +1935,9 @@ class Overlay(ScaledWindow):
             self.configuration.settings.color_identity_enabled = bool(
                 self.color_identity_checkbox_value.get()
             )
+            self.configuration.settings.color_icons_enabled = bool(
+                self.color_icons_checkbox_value.get()
+            )
             self.configuration.settings.draft_log_enabled = bool(
                 self.draft_log_checkbox_value.get()
             )
@@ -1942,6 +2068,7 @@ class Overlay(ScaledWindow):
             self.color_identity_checkbox_value.set(
                 self.configuration.settings.color_identity_enabled
             )
+            self.color_icons_checkbox_value.set(self.configuration.settings.color_icons_enabled)
             self.draft_log_checkbox_value.set(self.configuration.settings.draft_log_enabled)
             self.p1p1_ocr_checkbox_value.set(self.configuration.settings.p1p1_ocr_enabled)
             self.save_screenshot_checkbox_value.set(
@@ -2843,6 +2970,19 @@ class Overlay(ScaledWindow):
                 offvalue=0,
             )
 
+            color_icons_label = Label(
+                popup,
+                text="Enable Color Icons:",
+                style="MainSectionsBold.TLabel",
+                anchor="e",
+            )
+            color_icons_checkbox = Checkbutton(
+                popup,
+                variable=self.color_icons_checkbox_value,
+                onvalue=1,
+                offvalue=0,
+            )
+
             current_draft_label = Label(
                 popup,
                 text="Enable Current Draft Display:",
@@ -3248,6 +3388,24 @@ class Overlay(ScaledWindow):
                 pady=row_padding_y,
             )
             color_identity_checkbox.grid(
+                row=row_count,
+                column=1,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            row_count += 1
+
+            color_icons_label.grid(
+                row=row_count,
+                column=0,
+                columnspan=1,
+                sticky="nsew",
+                padx=row_padding_x,
+                pady=row_padding_y,
+            )
+            color_icons_checkbox.grid(
                 row=row_count,
                 column=1,
                 columnspan=1,
@@ -3796,6 +3954,12 @@ class Overlay(ScaledWindow):
                 (
                     self.color_identity_checkbox_value,
                     lambda: self.color_identity_checkbox_value.trace(
+                        "w", self.__update_settings_callback
+                    ),
+                ),
+                (
+                    self.color_icons_checkbox_value,
+                    lambda: self.color_icons_checkbox_value.trace(
                         "w", self.__update_settings_callback
                     ),
                 ),

@@ -73,6 +73,7 @@ class Settings(BaseModel):
     p1p1_ocr_enabled: bool = True
     save_screenshot_enabled: bool = False
     color_identity_enabled: bool = False
+    color_icons_enabled: bool = True
     current_draft_enabled: bool = True
     data_source_enabled: bool = True
     deck_filter_enabled: bool = True

@@ -715,6 +715,7 @@ CARD_TYPE_DICT = {
 }
 
 TABLE_PROPORTIONS = [(1,), (0.75, 0.25), (0.60, 0.20, 0.20), (0.46, 0.18, 0.18, 0.18)]
+COLOR_ICON_COLUMN_WIDTH = 34
 
 # TODO: Where are these values from?
 # My understanding is this array is an array for values for each of the first six packs

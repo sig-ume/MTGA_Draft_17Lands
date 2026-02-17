@@ -46,7 +46,7 @@ def set_language(language: str) -> None:
         language: Language code (EN or JP).
     """
     global _current_language
-    if language in constants.LANGUAGE_OPTIONS:
+    if language in constants.LANGUAGE_OPTIONS and language != _current_language:
         _current_language = language
         logger.info(f"Display language set to: {language}")
 
