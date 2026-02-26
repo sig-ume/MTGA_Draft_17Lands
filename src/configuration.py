@@ -3,10 +3,8 @@
 import json
 import os
 import sys
-from typing import Tuple
-
-from pydantic import BaseModel, Field, field_validator
-
+from pydantic import BaseModel, field_validator, Field
+from typing import List, Dict, Tuple
 from src import constants
 from src.logger import create_logger
 
@@ -53,44 +51,53 @@ class Settings(BaseModel):
     """This class holds UI settings"""
 
     table_width: int = 270
-    column_2: str = constants.COLUMNS_OPTIONS_EXTRA_DICT[constants.COLUMN_2_DEFAULT]
-    column_3: str = constants.COLUMNS_OPTIONS_EXTRA_DICT[constants.COLUMN_3_DEFAULT]
-    column_4: str = constants.COLUMNS_OPTIONS_EXTRA_DICT[constants.COLUMN_4_DEFAULT]
-    column_5: str = constants.COLUMNS_OPTIONS_EXTRA_DICT[constants.COLUMN_5_DEFAULT]
-    column_6: str = constants.COLUMNS_OPTIONS_EXTRA_DICT[constants.COLUMN_6_DEFAULT]
-    column_7: str = constants.COLUMNS_OPTIONS_EXTRA_DICT[constants.COLUMN_7_DEFAULT]
+    column_configs: Dict[str, List[str]] = Field(
+        default_factory=lambda: {
+            "pack_table": ["name", "value", "gihwr"],
+            "missing_table": ["name", "alsa"],
+            "taken_table": ["name", "count", "gihwr"],
+            "compare_table": ["name", "gihwr", "iwd"],
+            "overlay_table": ["name", "value", "gihwr"],  # <-- UPDATED OVERLAY DEFAULTS
+        }
+    )
     deck_filter: str = constants.DECK_FILTER_DEFAULT
     filter_format: str = constants.DECK_FILTER_FORMAT_COLORS
+    display_language: str = constants.LANGUAGE_DEFAULT
     result_format: str = constants.RESULT_FORMAT_WIN_RATE
     ui_size: str = constants.UI_SIZE_DEFAULT
+    theme: str = "Dark"
+    theme_base: str = "clam"  # aqua, vista, clam, etc.
+    theme_palette: str = "Neutral"  # Forest, Island, etc.
+    theme_custom_path: str = ""  # Path to user's .tcl file
+
+    # Core Feature Toggles
     card_colors_enabled: bool = False
-    missing_enabled: bool = True
-    stats_enabled: bool = False
-    auto_highest_enabled: bool = True
-    curve_bonus_enabled: bool = False
-    color_bonus_enabled: bool = False
+    auto_highest_enabled: bool = False
     draft_log_enabled: bool = True
     p1p1_ocr_enabled: bool = True
     save_screenshot_enabled: bool = False
-    color_identity_enabled: bool = False
-    current_draft_enabled: bool = True
-    data_source_enabled: bool = True
-    deck_filter_enabled: bool = True
-    refresh_button_enabled: bool = True
     update_notifications_enabled: bool = True
     missing_notifications_enabled: bool = True
-    taken_alsa_enabled: bool = False
-    taken_ata_enabled: bool = False
-    taken_gpwr_enabled: bool = False
-    taken_ohwr_enabled: bool = False
-    taken_gdwr_enabled: bool = False
-    taken_gndwr_enabled: bool = False
-    taken_iwd_enabled: bool = False
-    taken_wheel_enabled: bool = False
+
+    # System Paths (Restored)
     arena_log_location: str = ""
     database_location: str = ""
-    signals_enabled: bool = True
-    display_language: str = constants.LANGUAGE_DEFAULT
+
+    @field_validator("deck_filter")
+    @classmethod
+    def validate_deck_filter(cls, value, info):
+        allowed_values = constants.DECK_FILTERS
+        if value not in allowed_values:
+            return cls.model_fields[info.field_name].default
+        return value
+
+    @field_validator("filter_format")
+    @classmethod
+    def validate_filter_format(cls, value, info):
+        allowed_values = constants.DECK_FILTER_FORMAT_LIST
+        if value not in allowed_values:
+            return cls.model_fields[info.field_name].default
+        return value
 
     @field_validator("display_language")
     @classmethod
@@ -100,26 +107,10 @@ class Settings(BaseModel):
             return cls.model_fields[info.field_name].default
         return value
 
-    @field_validator("deck_filter")
-    @classmethod
-    def validate_deck_filter(cls, value, info):
-        allowed_values = constants.DECK_FILTERS  # List of options
-        if value not in allowed_values:
-            return cls.model_fields[info.field_name].default
-        return value
-
-    @field_validator("filter_format")
-    @classmethod
-    def validate_filter_format(cls, value, info):
-        allowed_values = constants.DECK_FILTER_FORMAT_LIST  # List of options
-        if value not in allowed_values:
-            return cls.model_fields[info.field_name].default
-        return value
-
     @field_validator("result_format")
     @classmethod
     def validate_result_format(cls, value, info):
-        allowed_values = constants.RESULT_FORMAT_LIST  # List of options
+        allowed_values = constants.RESULT_FORMAT_LIST
         if value not in allowed_values:
             return cls.model_fields[info.field_name].default
         return value
@@ -127,7 +118,7 @@ class Settings(BaseModel):
     @field_validator("ui_size")
     @classmethod
     def validate_ui_size(cls, value, info):
-        allowed_values = constants.UI_SIZE_DICT  # List of options
+        allowed_values = constants.UI_SIZE_DICT
         if value not in allowed_values:
             return cls.model_fields[info.field_name].default
         return value
@@ -204,7 +195,9 @@ def read_configuration(file_location: str = CONFIG_FILE) -> Tuple[Configuration,
     return config_object, success
 
 
-def write_configuration(config_object: Configuration, file_location: str = CONFIG_FILE) -> bool:
+def write_configuration(
+    config_object: Configuration, file_location: str = CONFIG_FILE
+) -> bool:
     """function is responsible for writing the contents of a Configuration object to a specified file location"""
     success = False
 
